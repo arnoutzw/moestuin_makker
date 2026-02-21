@@ -1,6 +1,6 @@
 {
-  "name": "GardenPal",
-  "short_name": "GardenPal",
+  "name": "Moestuin Makker",
+  "short_name": "Moestuin Makker",
   "description": "Smart seed storage and square foot garden management with care coaching",
   "start_url": "./index.html",
   "scope": "./",

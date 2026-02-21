@@ -1,5 +1,5 @@
 // ============================================================================
-// GARDENPAL APP.JS - FIRST HALF
+// MOESTUIN MAKKER APP.JS - FIRST HALF
 // React 18 App with Tailwind CSS - Production Code
 // ============================================================================
 
@@ -2291,9 +2291,9 @@ const DataContext = createContext();
 const DataProvider = ({
   children
 }) => {
-  const [seeds, setSeeds] = useLocalStorage('gardenpal_seeds', []);
-  const [gardens, setGardens] = useLocalStorage('gardenpal_gardens', []);
-  const [tasks, setTasks] = useLocalStorage('gardenpal_tasks', []);
+  const [seeds, setSeeds] = useLocalStorage('moestuinmakker_seeds', []);
+  const [gardens, setGardens] = useLocalStorage('moestuinmakker_gardens', []);
+  const [tasks, setTasks] = useLocalStorage('moestuinmakker_tasks', []);
   const addSeed = useCallback(seed => {
     const newSeed = {
       id: generateId(),
@@ -3751,7 +3751,7 @@ const SettingsView = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gardenpal-backup-${formatDate(new Date()).split(' ')[0]}.json`;
+    a.download = `moestuinmakker-backup-${formatDate(new Date()).split(' ')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -3788,7 +3788,7 @@ const SettingsView = () => {
     className: "space-y-2 text-sm text-gray-600"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     className: "font-semibold"
-  }, "App Name:"), " GardenPal"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+  }, "App Name:"), " Moestuin Makker"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     className: "font-semibold"
   }, "Version:"), " 1.0.0"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     className: "font-semibold"
@@ -3798,7 +3798,7 @@ const SettingsView = () => {
     className: "font-semibold"
   }, "Tasks:"), " ", tasks.filter(t => !t.completed).length, " pending"))), /*#__PURE__*/React.createElement("div", {
     className: "bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800"
-  }, /*#__PURE__*/React.createElement("p", null, "GardenPal helps you manage your garden from seed to harvest. Track your plants, get care reminders, and celebrate your gardening success!")));
+  }, /*#__PURE__*/React.createElement("p", null, "Moestuin Makker helps you manage your garden from seed to harvest. Track your plants, get care reminders, and celebrate your gardening success!")));
 };
 
 /**
@@ -3882,7 +3882,7 @@ const AppContent = () => {
     className: "max-w-lg mx-auto px-4 py-4 flex items-center justify-between"
   }, /*#__PURE__*/React.createElement("h1", {
     className: "text-2xl font-bold text-green-600"
-  }, "\uD83C\uDF31 GardenPal"), /*#__PURE__*/React.createElement("button", {
+  }, "\uD83C\uDF31 Moestuin Makker"), /*#__PURE__*/React.createElement("button", {
     className: "relative"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-2xl"
