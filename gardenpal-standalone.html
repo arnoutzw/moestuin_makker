@@ -1,0 +1,3998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#10b981">
+  <meta name="description" content="Smart seed storage and square foot garden management">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GardenPal">
+  <title>GardenPal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            garden: {
+              50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
+              400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d',
+              800: '#166534', 900: '#14532d'
+            },
+            earth: {
+              50: '#fdf8f0', 100: '#f5e6d3', 200: '#e8c9a0', 300: '#d4a574',
+              400: '#c08552', 500: '#a0673d', 600: '#7c4f30', 700: '#5c3a23'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0fdf4; overscroll-behavior: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    .animate-pop { animation: pop 0.25s ease-out; }
+    .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+    .slot-capsule { transition: all 0.2s ease; }
+    .slot-capsule:hover { transform: scale(1.08); box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .garden-square { transition: all 0.15s ease; }
+    .garden-square:hover { transform: scale(1.03); }
+    .tab-active { border-bottom: 3px solid #10b981; color: #10b981; font-weight: 600; }
+    .modal-backdrop { backdrop-filter: blur(4px); }
+    .timeline-dot { transition: all 0.2s ease; }
+    .timeline-dot.active { box-shadow: 0 0 0 4px rgba(16,185,129,0.3); }
+    input, select, textarea { font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+// ============================================================================
+// GARDENPAL APP.JS - FIRST HALF
+// React 18 App with Tailwind CSS - Production Code
+// ============================================================================
+
+const {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  createContext,
+  useContext
+} = React;
+
+// ============================================================================
+// SECTION 1: CONSTANTS & PLANT DATABASE
+// ============================================================================
+
+const SEED_BOX_LAYOUT = [7, 6, 7, 7, 6, 7]; // 40 total slots
+
+const LIFECYCLE_STAGES = [{
+  id: 'empty',
+  label: 'Empty',
+  emoji: '□',
+  color: 'bg-gray-100',
+  description: 'No seed in slot'
+}, {
+  id: 'planted',
+  label: 'Planted',
+  emoji: '🌱',
+  color: 'bg-blue-100',
+  description: 'Seed has been sown'
+}, {
+  id: 'germinating',
+  label: 'Germinating',
+  emoji: '🌾',
+  color: 'bg-green-100',
+  description: 'Seed is sprouting'
+}, {
+  id: 'seedling',
+  label: 'Seedling',
+  emoji: '🌿',
+  color: 'bg-green-200',
+  description: 'Young plant with first leaves'
+}, {
+  id: 'vegetative',
+  label: 'Vegetative',
+  emoji: '🌳',
+  color: 'bg-green-300',
+  description: 'Rapid leaf and stem growth'
+}, {
+  id: 'flowering',
+  label: 'Flowering',
+  emoji: '🌸',
+  color: 'bg-pink-200',
+  description: 'Flowers appearing'
+}, {
+  id: 'fruiting',
+  label: 'Fruiting',
+  emoji: '🍅',
+  color: 'bg-yellow-200',
+  description: 'Fruits developing'
+}, {
+  id: 'harvesting',
+  label: 'Harvesting',
+  emoji: '✂️',
+  color: 'bg-orange-200',
+  description: 'Ready to pick'
+}, {
+  id: 'done',
+  label: 'Done',
+  emoji: '✓',
+  color: 'bg-gray-200',
+  description: 'Harvest complete'
+}];
+const PLANT_FAMILIES = {
+  'Solanaceae': '#ef4444',
+  'Cucurbitaceae': '#f59e0b',
+  'Brassicaceae': '#8b5cf6',
+  'Fabaceae': '#10b981',
+  'Apiaceae': '#f97316',
+  'Lamiaceae': '#06b6d4',
+  'Asteraceae': '#ec4899',
+  'Allium': '#6366f1',
+  'Chenopodiaceae': '#84cc16',
+  'Other': '#9ca3af'
+};
+const PLANT_DATABASE = {
+  tomato: {
+    id: 'tomato',
+    species: 'Solanum lycopersicum',
+    commonName: 'Tomato',
+    family: 'Solanaceae',
+    difficulty: 'moderate',
+    emoji: '🍅',
+    varieties: [{
+      name: 'Cherry',
+      description: 'Small, sweet, prolific fruiting'
+    }, {
+      name: 'Beefsteak',
+      description: 'Large, meaty, perfect for slicing'
+    }, {
+      name: 'Roma',
+      description: 'Oval, great for sauces and canning'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '05-15'
+    },
+    germinationDays: {
+      min: 5,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 60,
+      max: 85
+    },
+    spacing: 45,
+    sunRequirements: 'full',
+    wateringNeeds: 'high',
+    companionPlants: ['basil', 'carrot', 'parsley'],
+    avoidPlants: ['brassicaceae'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Seed is in soil, waiting to germinate',
+        healthIndicators: ['Soil remains moist', 'Temperature 20-25°C', 'No mold or fungus'],
+        careTips: ['Keep soil consistently moist', 'Maintain warm temperature', 'Provide bottom heat if needed'],
+        commonIssues: [{
+          issue: 'Seed rot',
+          solutions: ['Improve drainage', 'Reduce watering frequency', 'Use fresh seed']
+        }, {
+          issue: 'Damping off',
+          solutions: ['Ensure air circulation', 'Use sterile soil', 'Avoid overwatering']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'First sprout breaking through soil',
+        healthIndicators: ['Strong white root visible', 'First leaves emerging', 'No yellow discoloration'],
+        careTips: ['Keep soil moist but not waterlogged', 'Reduce temperature to 18-20°C', 'Provide light immediately'],
+        commonIssues: [{
+          issue: 'Leggy seedlings',
+          solutions: ['Increase light intensity', 'Lower temperature', 'Position light closer']
+        }, {
+          issue: 'Slow germination',
+          solutions: ['Check soil temperature', 'Ensure proper moisture', 'Verify seed viability']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Plant has true leaves developing',
+        healthIndicators: ['2-3 sets of true leaves', 'Green and sturdy stems', 'Good root development'],
+        careTips: ['Provide 14-16 hours of light daily', 'Water from below', 'Maintain 18-20°C temperature'],
+        commonIssues: [{
+          issue: 'Purple discoloration',
+          solutions: ['Increase light', 'Warm up environment', 'Check phosphorus']
+        }, {
+          issue: 'Wilting',
+          solutions: ['Reduce light intensity', 'Increase humidity', 'Check for pests']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 21,
+          max: 35
+        },
+        description: 'Rapid stem and leaf growth',
+        healthIndicators: ['Multiple leaf sets', 'Thick green stems', 'Vigorous growth'],
+        careTips: ['Gradually harden off plants', 'Increase air circulation', 'Maintain consistent moisture'],
+        commonIssues: [{
+          issue: 'Bolting indoors',
+          solutions: ['Reduce temperature', 'Provide longer days', 'Prepare for transplant']
+        }, {
+          issue: 'Blossom end rot',
+          solutions: ['Maintain calcium levels', 'Keep watering consistent', 'Avoid overshooting nitrate']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 21,
+          max: 35
+        },
+        description: 'Yellow flowers developing',
+        healthIndicators: ['First flower clusters visible', 'Vigorous green foliage', 'Good bud set'],
+        careTips: ['Maintain consistent watering', 'Support with stakes or cages', 'Prune suckers for better fruiting'],
+        commonIssues: [{
+          issue: 'Flower drop',
+          solutions: ['Maintain 15-25°C temperature', 'Ensure consistent moisture', 'Increase potassium']
+        }, {
+          issue: 'Poor pollination',
+          solutions: ['Increase air movement', 'Provide bee access', 'Tap flowers gently']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 28,
+          max: 42
+        },
+        description: 'Green fruits developing, growing larger',
+        healthIndicators: ['Marble to egg-sized fruits', 'Green color uniform', 'Healthy foliage above'],
+        careTips: ['Increase watering', 'Provide consistent nutrition', 'Prune excessive foliage carefully'],
+        commonIssues: [{
+          issue: 'Blossom end rot',
+          solutions: ['Maintain consistent moisture', 'Add calcium supplement', 'Mulch to regulate soil']
+        }, {
+          issue: 'Fruit cracking',
+          solutions: ['Water evenly', 'Provide shade cloth', 'Maintain soil moisture']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 14,
+          max: 60
+        },
+        description: 'Fruits ripening, ready to pick when fully colored',
+        healthIndicators: ['Red coloration developing', 'Fruits easily detach', 'Fragrant aroma'],
+        careTips: ['Pick ripe fruits regularly', 'Allow air circulation', 'Continue watering and feeding'],
+        commonIssues: [{
+          issue: 'Green shoulder',
+          solutions: ['Reduce nitrogen', 'Ensure adequate phosphorus', 'Increase potassium']
+        }, {
+          issue: 'Slow ripening',
+          solutions: ['Increase temperature', 'Reduce nitrogen', 'Ensure sun exposure']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete, season finished',
+        healthIndicators: ['Plant exhausted', 'No more fruit production'],
+        careTips: ['Remove plant from garden', 'Compost healthy material', 'Plan crop rotation'],
+        commonIssues: []
+      }
+    }
+  },
+  pepper: {
+    id: 'pepper',
+    species: 'Capsicum annuum',
+    commonName: 'Pepper',
+    family: 'Solanaceae',
+    difficulty: 'challenging',
+    emoji: '🫑',
+    varieties: [{
+      name: 'Bell',
+      description: 'Large sweet peppers, multiple colors'
+    }, {
+      name: 'Chili',
+      description: 'Hot peppers with varying heat levels'
+    }],
+    sowWindow: {
+      start: '02-01',
+      end: '04-30'
+    },
+    germinationDays: {
+      min: 10,
+      max: 21
+    },
+    daysToHarvest: {
+      min: 90,
+      max: 120
+    },
+    spacing: 45,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['basil', 'onion'],
+    avoidPlants: ['fennel'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'Seed dormant in soil',
+        healthIndicators: ['No visible decay', 'Moist soil', 'Warm environment 24-27°C'],
+        careTips: ['Provide bottom heat', 'Keep soil consistently moist', 'Ensure high humidity'],
+        commonIssues: [{
+          issue: 'Very slow germination',
+          solutions: ['Increase soil temperature', 'Scarify seed coat', 'Use seed starting hormone']
+        }, {
+          issue: 'Mold growth',
+          solutions: ['Improve air circulation', 'Reduce humidity', 'Use fungicide if needed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'First shoot emerging',
+        healthIndicators: ['White root tip showing', 'Cotyledons emerging', 'Strong growth'],
+        careTips: ['Maintain warmth 24-27°C', 'Provide bright light soon', 'Avoid overwatering'],
+        commonIssues: [{
+          issue: 'Damping off',
+          solutions: ['Reduce moisture', 'Increase air flow', 'Sterilize soil']
+        }, {
+          issue: 'Slow growth',
+          solutions: ['Ensure adequate light', 'Maintain warmth', 'Check humidity']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 21,
+          max: 42
+        },
+        description: 'True leaves developing',
+        healthIndicators: ['4-6 true leaves', 'Strong stems', 'Dark green color'],
+        careTips: ['Provide 16+ hours of light', 'Temperature 20-24°C', 'Increase air circulation'],
+        commonIssues: [{
+          issue: 'Stunted growth',
+          solutions: ['Increase light hours', 'Warm environment', 'Check nutrients']
+        }, {
+          issue: 'Spider mites',
+          solutions: ['Increase humidity', 'Spray with neem oil', 'Improve air movement']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 28,
+          max: 42
+        },
+        description: 'Branching and leaf expansion',
+        healthIndicators: ['Multiple branches forming', 'Bushy plant structure', 'Healthy foliage'],
+        careTips: ['Harden off gradually', 'Maintain consistent warmth', 'Keep well-watered'],
+        commonIssues: [{
+          issue: 'Sudden wilting',
+          solutions: ['Check for root rot', 'Adjust watering', 'Monitor temperature']
+        }, {
+          issue: 'Yellowing leaves',
+          solutions: ['Check nitrogen levels', 'Ensure drainage', 'Test pH']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 21,
+          max: 35
+        },
+        description: 'Small white or purple flowers',
+        healthIndicators: ['First flower buds visible', 'Healthy green growth', 'No stress signs'],
+        careTips: ['Maintain 20-28°C', 'Increase potassium', 'Provide consistent moisture'],
+        commonIssues: [{
+          issue: 'Flower drop',
+          solutions: ['Maintain stable temperature', 'Reduce sudden stress', 'Increase phosphorus']
+        }, {
+          issue: 'Poor pollination',
+          solutions: ['Provide good air movement', 'Tap flowers', 'Reduce nitrogen']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 28,
+          max: 56
+        },
+        description: 'Small green peppers developing',
+        healthIndicators: ['Peppers enlarging', 'Consistent watering', 'Vigorous plant'],
+        careTips: ['Support branches with fruit', 'Maintain warm temps 22-28°C', 'Water consistently'],
+        commonIssues: [{
+          issue: 'Fruit drop',
+          solutions: ['Maintain temperature stability', 'Ensure consistent watering', 'Check humidity']
+        }, {
+          issue: 'Sunscald',
+          solutions: ['Provide afternoon shade', 'Maintain soil moisture', 'Avoid defoliation']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 21,
+          max: 90
+        },
+        description: 'Peppers coloring and ripening',
+        healthIndicators: ['Color change to red/yellow/orange', 'Waxy appearance', 'Full size'],
+        careTips: ['Harvest green if needed', 'Allow ripening for sweetness', 'Continue watering and feeding'],
+        commonIssues: [{
+          issue: 'Slow ripening',
+          solutions: ['Ensure adequate light', 'Maintain warmth', 'Reduce nitrogen']
+        }, {
+          issue: 'Rotting on vine',
+          solutions: ['Improve air circulation', 'Avoid overhead watering', 'Remove affected fruit']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Plant life cycle complete',
+        healthIndicators: [],
+        careTips: ['Remove and compost plant'],
+        commonIssues: []
+      }
+    }
+  },
+  lettuce: {
+    id: 'lettuce',
+    species: 'Lactuca sativa',
+    commonName: 'Lettuce',
+    family: 'Asteraceae',
+    difficulty: 'easy',
+    emoji: '🥬',
+    varieties: [{
+      name: 'Butterhead',
+      description: 'Soft, tender, creamy center'
+    }, {
+      name: 'Romaine',
+      description: 'Crisp, upright, great for Caesar salads'
+    }],
+    sowWindow: {
+      start: '02-01',
+      end: '10-31'
+    },
+    germinationDays: {
+      min: 4,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 45,
+      max: 65
+    },
+    spacing: 20,
+    sunRequirements: 'partial',
+    wateringNeeds: 'high',
+    companionPlants: ['carrot', 'radish', 'strawberry'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 4,
+          max: 10
+        },
+        description: 'Seeds in soil',
+        healthIndicators: ['Moist soil', 'Cool temperature 15-20°C', 'No fungal growth'],
+        careTips: ['Keep soil consistently moist', 'Light surface watering', 'Provide partial shade in heat'],
+        commonIssues: [{
+          issue: 'Seed drying out',
+          solutions: ['Water frequently', 'Use mulch', 'Increase humidity']
+        }, {
+          issue: 'Fungal disease',
+          solutions: ['Improve drainage', 'Reduce humidity', 'Provide air flow']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'First leaves breaking through',
+        healthIndicators: ['Cotyledons visible', 'Small green leaves', 'Rapid growth starting'],
+        careTips: ['Maintain moist soil', 'Provide bright light', 'Keep temperature 15-20°C'],
+        commonIssues: [{
+          issue: 'Damping off',
+          solutions: ['Reduce excess moisture', 'Increase air circulation', 'Ensure good drainage']
+        }, {
+          issue: 'Heat stress',
+          solutions: ['Provide shade cloth', 'Increase watering', 'Mulch around plants']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'True leaves developing',
+        healthIndicators: ['3-4 true leaves', 'Light green color', 'Ready to thin'],
+        careTips: ['Thin seedlings to proper spacing', 'Keep soil moist', 'Maintain cool temps'],
+        commonIssues: [{
+          issue: 'Leggy growth',
+          solutions: ['Increase light', 'Reduce temperature', 'Avoid overcrowding']
+        }, {
+          issue: 'Wilting in heat',
+          solutions: ['Provide afternoon shade', 'Increase watering', 'Mulch soil']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Leaf expansion and rosette formation',
+        healthIndicators: ['Multiple leaf layers', 'Vibrant green', 'Compact growth'],
+        careTips: ['Water deeply but less frequently', 'Maintain cool temperatures', 'Provide afternoon shade in summer'],
+        commonIssues: [{
+          issue: 'Bolting (flowering)',
+          solutions: ['Provide shade in heat', 'Maintain consistent moisture', 'Plant heat-tolerant varieties']
+        }, {
+          issue: 'Bitter taste',
+          solutions: ['Keep plants cool', 'Increase shade', 'Harvest before flowering']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Flower stalk appearing',
+        healthIndicators: ['Lettuce becoming bitter', 'Flower buds visible', 'Plant structure changing'],
+        careTips: ['Harvest immediately if still tender', 'Remove flowering plants if quality declines'],
+        commonIssues: [{
+          issue: 'Early bolting',
+          solutions: ['Plant in cool season', 'Provide shade', 'Choose bolt-resistant varieties']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for lettuce',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 3,
+          max: 30
+        },
+        description: 'Head formed and ready to harvest',
+        healthIndicators: ['Firm head', 'Good color', 'Before bolting'],
+        careTips: ['Harvest in early morning', 'Cut outer leaves or full head', 'Use sharp scissors', 'Keep watering for regrowth'],
+        commonIssues: [{
+          issue: 'Tough, bitter leaves',
+          solutions: ['Harvest earlier', 'Maintain cooler temps', 'Increase watering']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete',
+        healthIndicators: [],
+        careTips: ['Remove plant', 'Compost spent plant'],
+        commonIssues: []
+      }
+    }
+  },
+  cucumber: {
+    id: 'cucumber',
+    species: 'Cucumis sativus',
+    commonName: 'Cucumber',
+    family: 'Cucurbitaceae',
+    difficulty: 'moderate',
+    emoji: '🥒',
+    varieties: [{
+      name: 'Slicing',
+      description: 'Long, smooth, perfect for fresh eating'
+    }, {
+      name: 'Pickling',
+      description: 'Shorter, bumpy, ideal for pickles'
+    }],
+    sowWindow: {
+      start: '04-15',
+      end: '07-15'
+    },
+    germinationDays: {
+      min: 5,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 50,
+      max: 70
+    },
+    spacing: 30,
+    sunRequirements: 'full',
+    wateringNeeds: 'high',
+    companionPlants: ['bean', 'radish', 'corn'],
+    avoidPlants: ['aromatic_herbs'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Seed in warm soil',
+        healthIndicators: ['Warm soil 20-30°C', 'Moist but not waterlogged', 'No seed rot'],
+        careTips: ['Plant directly in ground', 'Soak seeds 1-2 hours before planting', 'Maintain warm soil'],
+        commonIssues: [{
+          issue: 'Seed rot',
+          solutions: ['Ensure good drainage', 'Avoid overwatering', 'Use fresh seed']
+        }, {
+          issue: 'Slow germination',
+          solutions: ['Increase soil temperature', 'Plant later in season', 'Check seed viability']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Sprout emerging',
+        healthIndicators: ['Sprout breaking soil', 'Strong growth', 'Warm environment maintained'],
+        careTips: ['Maintain 20-30°C temperature', 'Ensure consistent moisture', 'Provide sun immediately'],
+        commonIssues: [{
+          issue: 'Damping off',
+          solutions: ['Improve drainage', 'Increase air circulation', 'Avoid overwatering']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'True leaves appearing',
+        healthIndicators: ['First true leaves visible', 'Sturdy cotyledons', 'Rapid growth'],
+        careTips: ['Thin to one plant if multiple germinated', 'Provide strong sun', 'Maintain warmth'],
+        commonIssues: [{
+          issue: 'Leggy growth',
+          solutions: ['Increase sunlight', 'Reduce temperature', 'Improve air flow']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Vine growth and branching',
+        healthIndicators: ['Multiple vines forming', 'Large leaves', 'Vigorous growth'],
+        careTips: ['Provide trellis or support', 'Water deeply and regularly', 'Mulch around base'],
+        commonIssues: [{
+          issue: 'Powdery mildew',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Spray with sulfur']
+        }, {
+          issue: 'Yellowing leaves',
+          solutions: ['Check nitrogen levels', 'Ensure adequate water', 'Treat for pests']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Yellow flowers appearing',
+        healthIndicators: ['Male and female flowers visible', 'Healthy vines', 'Good pollinator activity'],
+        careTips: ['Reduce nitrogen feeding', 'Increase potassium and phosphorus', 'Maintain consistent watering'],
+        commonIssues: [{
+          issue: 'Flower drop',
+          solutions: ['Maintain 20-28°C', 'Increase potassium', 'Ensure consistent moisture']
+        }, {
+          issue: 'Poor pollination',
+          solutions: ['Encourage pollinators', 'Hand pollinate if needed', 'Avoid pesticides']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 14,
+          max: 35
+        },
+        description: 'Young cucumbers developing',
+        healthIndicators: ['Small fruits visible', 'Continuous flowering', 'Vigorous vine growth'],
+        careTips: ['Water deeply and frequently', 'Support heavy fruit', 'Remove competing tendrils'],
+        commonIssues: [{
+          issue: 'Curved cucumbers',
+          solutions: ['Maintain consistent watering', 'Support fruit horizontally', 'Ensure good light']
+        }, {
+          issue: 'Bitter cucumbers',
+          solutions: ['Water more frequently', 'Maintain 22-28°C', 'Avoid stress']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 21,
+          max: 56
+        },
+        description: 'Cucumbers ripening and ready to pick',
+        healthIndicators: ['Firm, green fruits', 'Proper size for variety', 'Smooth skin'],
+        careTips: ['Harvest every 2-3 days when small', 'Use scissors or knife to cut', 'Harvest in morning', 'Continuous harvesting promotes more fruit'],
+        commonIssues: [{
+          issue: 'Overripe, yellow cucumbers',
+          solutions: ['Harvest more frequently', 'Check plant regularly', 'Remove oversized fruit']
+        }, {
+          issue: 'Cucumber beetles',
+          solutions: ['Use row covers initially', 'Hand pick', 'Apply organic pesticide']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'End of season',
+        healthIndicators: [],
+        careTips: ['Remove spent vines', 'Compost healthy material'],
+        commonIssues: []
+      }
+    }
+  },
+  zucchini: {
+    id: 'zucchini',
+    species: 'Cucurbita pepo',
+    commonName: 'Zucchini',
+    family: 'Cucurbitaceae',
+    difficulty: 'easy',
+    emoji: '🍃',
+    varieties: [{
+      name: 'Green',
+      description: 'Dark green, prolific summer squash'
+    }, {
+      name: 'Yellow',
+      description: 'Golden color, slightly sweeter'
+    }],
+    sowWindow: {
+      start: '04-01',
+      end: '06-30'
+    },
+    germinationDays: {
+      min: 5,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 45,
+      max: 65
+    },
+    spacing: 60,
+    sunRequirements: 'full',
+    wateringNeeds: 'high',
+    companionPlants: ['bean', 'corn', 'basil'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Seed planted in warm soil',
+        healthIndicators: ['Warm soil 21-29°C', 'Moist soil', 'No fungal issues'],
+        careTips: ['Soak seeds before planting', 'Warm soil is essential', 'Keep consistently moist'],
+        commonIssues: [{
+          issue: 'Seed rot',
+          solutions: ['Improve drainage', 'Use warm soil', 'Reduce watering']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Sprout emerging through soil',
+        healthIndicators: ['Rapid sprout growth', 'Warm temperatures maintained', 'No disease'],
+        careTips: ['Keep soil warm and moist', 'Provide full sun', 'Maintain 21-29°C'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'First true leaves forming',
+        healthIndicators: ['True leaves visible', 'Sturdy plant', 'Rapid growth'],
+        careTips: ['Provide strong sunlight', 'Maintain warmth', 'Water consistently'],
+        commonIssues: []
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Vigorous vine and leaf growth',
+        healthIndicators: ['Large leaves', 'Multiple vines', 'Dense foliage'],
+        careTips: ['Provide plenty of space', 'Water deeply and regularly', 'Mulch to retain moisture', 'Provide support if needed'],
+        commonIssues: [{
+          issue: 'Powdery mildew',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Spray with fungicide']
+        }, {
+          issue: 'Vine borers',
+          solutions: ['Wrap stems with barriers', 'Inject BT into stems', 'Remove damaged vines']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Large yellow flowers appearing',
+        healthIndicators: ['Both male and female flowers', 'Healthy dark green foliage', 'Good pollinator visits'],
+        careTips: ['Reduce nitrogen feeding', 'Increase potassium and phosphorus', 'Maintain regular watering'],
+        commonIssues: [{
+          issue: 'Flower drop',
+          solutions: ['Maintain consistent watering', 'Avoid temperature extremes', 'Ensure good pollination']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Young zucchini fruits growing rapidly',
+        healthIndicators: ['Fruits enlarging quickly', 'Continuous flowering', 'Healthy foliage'],
+        careTips: ['Water deeply and frequently', 'Support heavy fruits', 'Continue fertilizing', 'Check for pests daily'],
+        commonIssues: [{
+          issue: 'Misshapen fruits',
+          solutions: ['Ensure consistent watering', 'Avoid excessive nitrogen', 'Provide good pollination']
+        }, {
+          issue: 'Blossom end rot',
+          solutions: ['Maintain consistent moisture', 'Add calcium', 'Mulch soil']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 21,
+          max: 84
+        },
+        description: 'Zucchini ready for regular picking',
+        healthIndicators: ['6-8 inches long optimal', 'Dark green color', 'Tender skin'],
+        careTips: ['Harvest every 2-3 days', 'Pick when small and tender', 'Use scissors to cut', 'Regular harvesting increases productivity'],
+        commonIssues: [{
+          issue: 'Oversized, bitter zucchini',
+          solutions: ['Harvest more frequently', 'Check plants daily', 'Remove oversized fruits']
+        }, {
+          issue: 'Powdery mildew on fruits',
+          solutions: ['Improve air circulation', 'Remove infected leaves', 'Apply sulfur spray']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Season complete',
+        healthIndicators: [],
+        careTips: ['Remove spent vines', 'Compost plant material'],
+        commonIssues: []
+      }
+    }
+  },
+  basil: {
+    id: 'basil',
+    species: 'Ocimum basilicum',
+    commonName: 'Basil',
+    family: 'Lamiaceae',
+    difficulty: 'easy',
+    emoji: '🌿',
+    varieties: [{
+      name: 'Sweet',
+      description: 'Classic Italian basil, aromatic'
+    }, {
+      name: 'Thai',
+      description: 'Spicy, peppery, essential for Asian cuisine'
+    }],
+    sowWindow: {
+      start: '04-15',
+      end: '06-30'
+    },
+    germinationDays: {
+      min: 5,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 30,
+      max: 45
+    },
+    spacing: 20,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['tomato', 'pepper', 'carrot'],
+    avoidPlants: ['sage', 'rue'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Seed in warm soil',
+        healthIndicators: ['Warm soil 18-25°C', 'Moist but not waterlogged', 'Light coverage'],
+        careTips: ['Direct sow or start indoors', 'Keep soil warm and moist', 'Provide good light'],
+        commonIssues: [{
+          issue: 'Slow germination',
+          solutions: ['Increase temperature', 'Ensure moisture', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'First shoots emerging',
+        healthIndicators: ['Quick germination', 'Strong growth', 'Moist soil maintained'],
+        careTips: ['Provide bright light immediately', 'Maintain 18-25°C', 'Reduce moisture slightly'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'True leaves developing',
+        healthIndicators: ['2-3 sets of true leaves', 'Compact growth', 'Good color'],
+        careTips: ['Thin seedlings to proper spacing', 'Provide strong sunlight', 'Maintain warmth'],
+        commonIssues: [{
+          issue: 'Leggy seedlings',
+          solutions: ['Increase light', 'Reduce temperature', 'Improve air flow']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Leafy growth phase',
+        healthIndicators: ['Multiple leaf pairs', 'Bushy form', 'Vibrant green color'],
+        careTips: ['Pinch off flower buds', 'Water when soil surface dry', 'Maintain 18-25°C', 'Provide good air circulation'],
+        commonIssues: [{
+          issue: 'Leggy, sparse growth',
+          solutions: ['Pinch tops regularly', 'Provide more light', 'Increase temperatures']
+        }, {
+          issue: 'Fungal disease',
+          solutions: ['Improve air flow', 'Avoid wetting leaves', 'Reduce humidity']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 21
+        },
+        description: 'Flower buds and small flowers',
+        healthIndicators: ['Flower buds forming', 'Continued leaf growth', 'Plant may start declining'],
+        careTips: ['Pinch off flower buds to extend harvest', 'Keep pinching and harvesting', 'Maintain regular watering'],
+        commonIssues: [{
+          issue: 'Plant bolting early',
+          solutions: ['Pinch buds regularly', 'Maintain consistent moisture', 'Avoid stress']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for basil',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 30,
+          max: 84
+        },
+        description: 'Continual leaf harvesting',
+        healthIndicators: ['New leaf growth', 'Bushy plant maintained', 'Aromatic leaves'],
+        careTips: ['Harvest frequently to promote bushiness', 'Pinch from top', 'Never remove more than 1/3 at once', 'Harvest before flowering for best flavor'],
+        commonIssues: [{
+          issue: 'Plant becomes woody',
+          solutions: ['Harvest more frequently', 'Pinch tops regularly', 'Start new plants seasonally']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'End of season',
+        healthIndicators: [],
+        careTips: ['Remove plant', 'Compost or dry leaves for storage'],
+        commonIssues: []
+      }
+    }
+  },
+  carrot: {
+    id: 'carrot',
+    species: 'Daucus carota subsp. sativus',
+    commonName: 'Carrot',
+    family: 'Apiaceae',
+    difficulty: 'moderate',
+    emoji: '🥕',
+    varieties: [{
+      name: 'Nantes',
+      description: 'Medium-long, sweet, tender core'
+    }, {
+      name: 'Chantenay',
+      description: 'Shorter, stout, excellent flavor'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '08-31'
+    },
+    germinationDays: {
+      min: 14,
+      max: 21
+    },
+    daysToHarvest: {
+      min: 60,
+      max: 85
+    },
+    spacing: 5,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['lettuce', 'onion', 'tomato'],
+    avoidPlants: ['dill', 'parsnip'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Seed in soil awaiting germination',
+        healthIndicators: ['Moist soil maintained', 'Cool to moderate temperature 15-20°C', 'No crusting on soil'],
+        careTips: ['Direct sow in garden', 'Keep soil consistently moist', 'Thin seedlings when small', 'Protect with shade cloth in heat'],
+        commonIssues: [{
+          issue: 'Poor germination',
+          solutions: ['Keep soil moist throughout germination', 'Soak seeds 2-4 hours', 'Ensure adequate light']
+        }, {
+          issue: 'Soil crusting',
+          solutions: ['Water gently', 'Thin seedlings carefully', 'Use sand mulch']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'First leaves visible',
+        healthIndicators: ['Cotyledons visible', 'Small green leaves emerging', 'Slow but steady growth'],
+        careTips: ['Keep consistently moist', 'Provide light immediately', 'Temperature 15-20°C ideal', 'Begin thinning carefully'],
+        commonIssues: [{
+          issue: 'Slow germination',
+          solutions: ['Ensure moist soil', 'Provide light', 'Keep temperature moderate']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Feathery true leaves developing',
+        healthIndicators: ['Delicate feathery foliage', 'Tiny root systems forming', 'Green color'],
+        careTips: ['Thin ruthlessly to proper spacing (5cm)', 'Water gently', 'Keep weeds out', 'Provide light mulch'],
+        commonIssues: [{
+          issue: 'Crowding causing forked roots',
+          solutions: ['Thin aggressively early', 'Remove weak seedlings', 'Maintain 5cm spacing']
+        }, {
+          issue: 'Green shoulders on developing roots',
+          solutions: ['Increase soil depth', 'Hill up soil around roots', 'Provide shade']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 28,
+          max: 42
+        },
+        description: 'Foliage growth, root expansion underground',
+        healthIndicators: ['Ferny green foliage', 'Dense leaf cover', 'Soil at proper moisture'],
+        careTips: ['Water deeply and regularly', 'Keep soil loose for root development', 'Thin again if needed', 'Watch for pests'],
+        commonIssues: [{
+          issue: 'Carrot rust fly damage',
+          solutions: ['Use row covers', 'Intercrop with onions', 'Remove damaged plants early']
+        }, {
+          issue: 'Yellowing foliage',
+          solutions: ['Check drainage', 'Ensure nitrogen levels', 'Check for pests']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable in first season',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for carrots',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 7,
+          max: 60
+        },
+        description: 'Roots reaching mature size',
+        healthIndicators: ['Orange color visible at top', 'Proper size for variety', 'Shoulders 1-2cm diameter'],
+        careTips: ['Can harvest young and small', 'Wait until full size for maximum sweetness', 'Loosen soil before pulling', 'Best flavor after light frost'],
+        commonIssues: [{
+          issue: 'Splitting and cracking',
+          solutions: ['Maintain consistent moisture', 'Avoid overwatering after dry period', 'Mulch to regulate soil']
+        }, {
+          issue: 'Tough, woody texture',
+          solutions: ['Harvest earlier', 'Maintain consistent watering', 'Improve soil texture']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete',
+        healthIndicators: [],
+        careTips: ['Remove plants', 'Prepare for next crop'],
+        commonIssues: []
+      }
+    }
+  },
+  bean: {
+    id: 'bean',
+    species: 'Phaseolus vulgaris',
+    commonName: 'Bean',
+    family: 'Fabaceae',
+    difficulty: 'easy',
+    emoji: '🫘',
+    varieties: [{
+      name: 'Bush',
+      description: 'Compact, determinate, no staking needed'
+    }, {
+      name: 'Pole',
+      description: 'Vining, requires support, extended harvest'
+    }],
+    sowWindow: {
+      start: '04-15',
+      end: '07-15'
+    },
+    germinationDays: {
+      min: 7,
+      max: 14
+    },
+    daysToHarvest: {
+      min: 50,
+      max: 70
+    },
+    spacing: 10,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['corn', 'cucumber', 'zucchini'],
+    avoidPlants: ['onion', 'garlic'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Seed in warm soil',
+        healthIndicators: ['Warm soil 16-27°C', 'Moist but well-drained', 'No seed rot'],
+        careTips: ['Plant directly in ground', 'Soak seeds for faster germination', 'Warm soil essential', 'Wait until soil warms'],
+        commonIssues: [{
+          issue: 'Seed rot',
+          solutions: ['Improve drainage', 'Ensure warmth', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Sprout breaking through soil',
+        healthIndicators: ['Strong sprout emergence', 'Warm soil maintained', 'Rapid growth'],
+        careTips: ['Maintain 16-27°C temperature', 'Keep soil moist', 'Provide sun immediately'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'First true leaves visible',
+        healthIndicators: ['Sturdy growth', 'First true leaves', 'Green color'],
+        careTips: ['Thin to proper spacing', 'Support poles if pole variety', 'Provide strong sun', 'Maintain warmth'],
+        commonIssues: []
+      },
+      vegetative: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'Leafy growth and vine development',
+        healthIndicators: ['Multiple leaf sets', 'Bushy form', 'Healthy foliage'],
+        careTips: ['Ensure proper support for pole beans', 'Water when soil dry to 2 inches', 'Avoid nitrogen excess', 'Mulch around base'],
+        commonIssues: [{
+          issue: 'Leaf beetles',
+          solutions: ['Hand pick', 'Use row covers', 'Spray with neem']
+        }, {
+          issue: 'Powdery mildew',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Use sulfur spray']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Colorful flowers appearing',
+        healthIndicators: ['White, pink, or purple flowers', 'Healthy foliage', 'Good pollinator activity'],
+        careTips: ['Maintain consistent watering', 'Provide full sun', 'Reduce nitrogen feeding', 'Let soil dry between waterings'],
+        commonIssues: [{
+          issue: 'Flower drop',
+          solutions: ['Maintain consistent moisture', 'Avoid temperature extremes', 'Reduce nitrogen']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'Green pods developing and enlarging',
+        healthIndicators: ['Pods enlarging', 'Continuous flowering', 'Vigorous growth'],
+        careTips: ['Water deeply and regularly', 'Continue supporting vines', 'Watch for pests', 'Begin harvesting when fingers can snap pods'],
+        commonIssues: [{
+          issue: 'Pod drop',
+          solutions: ['Maintain consistent watering', 'Avoid temperature stress', 'Continue fertilizing']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 14,
+          max: 42
+        },
+        description: 'Green beans ready for picking',
+        healthIndicators: ['Smooth, tender pods', '4-6 inches long optimal', 'Snap when bent'],
+        careTips: ['Harvest every 2-3 days', 'Pick when snap cleanly', 'Harvest in morning', 'Continued picking promotes more flowers', 'Leave some pods for dried beans if desired'],
+        commonIssues: [{
+          issue: 'Tough, stringy beans',
+          solutions: ['Harvest more frequently', 'Pick when smaller', 'Check variety for strings']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Season complete',
+        healthIndicators: [],
+        careTips: ['Remove spent plants', 'Compost material', 'Consider nitrogen fixing benefit for next crop'],
+        commonIssues: []
+      }
+    }
+  },
+  pea: {
+    id: 'pea',
+    species: 'Pisum sativum',
+    commonName: 'Pea',
+    family: 'Fabaceae',
+    difficulty: 'easy',
+    emoji: '🫛',
+    varieties: [{
+      name: 'Sugar Snap',
+      description: 'Eat whole pod, sweet and crunchy'
+    }, {
+      name: 'Garden',
+      description: 'Shell peas, classic sweet flavor'
+    }],
+    sowWindow: {
+      start: '02-01',
+      end: '04-30'
+    },
+    germinationDays: {
+      min: 10,
+      max: 14
+    },
+    daysToHarvest: {
+      min: 55,
+      max: 70
+    },
+    spacing: 5,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['carrot', 'turnip', 'cucumber'],
+    avoidPlants: ['onion', 'garlic'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 10,
+          max: 14
+        },
+        description: 'Seed in cool season soil',
+        healthIndicators: ['Cool soil 10-18°C', 'Moist but well-drained', 'No seed rot'],
+        careTips: ['Direct sow in early spring', 'Soak seeds overnight', 'Cool soil is fine for peas', 'Plant deep (2 inches)'],
+        commonIssues: [{
+          issue: 'Seed rot in wet soil',
+          solutions: ['Improve drainage', 'Wait for proper soil conditions', 'Use treated seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 10,
+          max: 14
+        },
+        description: 'Sprout emerging',
+        healthIndicators: ['Strong sprout growth', 'Cool conditions OK', 'Consistent moisture'],
+        careTips: ['Keep soil consistently moist', 'Temperature 10-18°C ideal', 'Provide sun', 'Thin seedlings if crowded'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'First true leaves and tendrils',
+        healthIndicators: ['Characteristic pea leaves', 'Tendrils starting', 'Upright growth'],
+        careTips: ['Provide support early (pea sticks or netting)', 'Space properly', 'Thin if crowded', 'Keep soil moist'],
+        commonIssues: [{
+          issue: 'Stretching for support',
+          solutions: ['Provide early support', 'Increase light', 'Thin seedlings']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 21
+        },
+        description: 'Vigorous vine and leaf growth',
+        healthIndicators: ['Dense leaf cover', 'Climbing well on support', 'Dark green foliage'],
+        careTips: ['Ensure support is strong', 'Water when dry', 'Monitor for pests', 'Avoid excess nitrogen'],
+        commonIssues: [{
+          issue: 'Powdery mildew',
+          solutions: ['Improve air flow', 'Water at soil level', 'Use sulfur spray']
+        }, {
+          issue: 'Pea moth damage',
+          solutions: ['Use pheromone traps', 'Plant earlier or later', 'Remove affected pods']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'White, pink, or purple flowers',
+        healthIndicators: ['Continuous flowering', 'Healthy foliage', 'Good pollinator visits'],
+        careTips: ['Water consistently', 'Avoid excess heat', 'Keep harvesting for continued flowering', 'Provide full sun'],
+        commonIssues: [{
+          issue: 'Flower drop in heat',
+          solutions: ['Provide shade cloth in heat', 'Maintain consistent watering', 'Plant earlier crop']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'Pods developing and filling',
+        healthIndicators: ['Pods enlarging noticeably', 'Continuous flowering above', 'Healthy vines'],
+        careTips: ['Water deeply and regularly', 'Support heavy pod load', 'Harvest regularly to encourage more', 'Watch for pests'],
+        commonIssues: [{
+          issue: 'Empty or poorly filled pods',
+          solutions: ['Ensure adequate watering', 'Check pollination', 'Maintain consistent moisture']
+        }]
+      },
+      harvesting: {
+        durationDays: {
+          min: 7,
+          max: 30
+        },
+        description: 'Pods ready for picking',
+        healthIndicators: ['Plump pods', 'Bright green color', 'Tender for snap peas'],
+        careTips: ['For sugar snap: harvest when snap when bent', 'For shell peas: harvest when pods full and bright', 'Harvest in morning', 'Pick regularly for continued production', 'Use two hands when harvesting to avoid damaging vines'],
+        commonIssues: [{
+          issue: 'Tough, starchy peas',
+          solutions: ['Harvest earlier', 'Use sugar snap variety', 'Refrigerate quickly after picking']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Season complete',
+        healthIndicators: [],
+        careTips: ['Remove spent plants', 'Compost nitrogen-rich material'],
+        commonIssues: []
+      }
+    }
+  },
+  spinach: {
+    id: 'spinach',
+    species: 'Spinacia oleracea',
+    commonName: 'Spinach',
+    family: 'Chenopodiaceae',
+    difficulty: 'easy',
+    emoji: '🥗',
+    varieties: [{
+      name: 'Bloomsdale',
+      description: 'Crinkled leaves, very hardy, excellent flavor'
+    }, {
+      name: 'Baby Leaf',
+      description: 'Small tender leaves, quick growing'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '04-30'
+    },
+    germinationDays: {
+      min: 7,
+      max: 14
+    },
+    daysToHarvest: {
+      min: 40,
+      max: 50
+    },
+    spacing: 10,
+    sunRequirements: 'partial',
+    wateringNeeds: 'high',
+    companionPlants: ['lettuce', 'radish', 'strawberry'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Seed in cool soil',
+        healthIndicators: ['Cool to moderate temperature 10-15°C', 'Moist soil', 'No fungal growth'],
+        careTips: ['Direct sow in early spring or fall', 'Keep soil moist', 'Soak seeds for faster germination', 'Thin soon after germination'],
+        commonIssues: [{
+          issue: 'Poor germination in heat',
+          solutions: ['Plant in spring or fall only', 'Provide afternoon shade', 'Soak seeds']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'First shoots emerging',
+        healthIndicators: ['Cotyledons visible', 'Quick growth', 'Moist soil maintained'],
+        careTips: ['Provide bright light immediately', 'Keep soil consistently moist', 'Cool temps 10-15°C preferred', 'Begin thinning process'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'True leaves appearing and expanding',
+        healthIndicators: ['Characteristic spinach leaves', 'Rapid growth', 'Green color'],
+        careTips: ['Thin to proper spacing (10cm)', 'Keep well-watered', 'Provide bright light', 'Maintain cool temperature'],
+        commonIssues: [{
+          issue: 'Bolting (flowering) in heat',
+          solutions: ['Plant cool season only', 'Provide shade in spring', 'Plant heat-resistant varieties']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Rosette formation with expanding leaves',
+        healthIndicators: ['Large rosette forming', 'Multiple leaf layers', 'Vibrant green'],
+        careTips: ['Water deeply and regularly', 'Maintain cool temperatures', 'Mulch to keep soil cool', 'Provide afternoon shade if warm'],
+        commonIssues: [{
+          issue: 'Bolting (going to flower)',
+          solutions: ['Provide shade cloth', 'Increase watering frequency', 'Harvest before flowering']
+        }, {
+          issue: 'Leaf spot disease',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Remove infected leaves']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 7,
+          max: 14
+        },
+        description: 'Flower stalk developing',
+        healthIndicators: ['Bolting starting', 'Plant quality declining', 'Bitterness increasing'],
+        careTips: ['Harvest plant immediately if possible', 'Remove bolted plants to make room', 'Plant resistant varieties'],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for spinach',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 7,
+          max: 21
+        },
+        description: 'Leaves ready for harvest',
+        healthIndicators: ['Full rosette', 'Large tender leaves', 'Before bolting'],
+        careTips: ['Cut entire plant or harvest outer leaves only', 'Harvest in morning when crisp', 'Use sharp scissors or knife', 'Can do multiple harvests if careful', 'Harvest before flower stalk forms'],
+        commonIssues: [{
+          issue: 'Bitter taste',
+          solutions: ['Harvest earlier', 'Maintain cooler temps', 'Increase watering']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete',
+        healthIndicators: [],
+        careTips: ['Remove spent plants', 'Plant fall crop for continuous harvest'],
+        commonIssues: []
+      }
+    }
+  },
+  kale: {
+    id: 'kale',
+    species: 'Brassica oleracea var. acephala',
+    commonName: 'Kale',
+    family: 'Brassicaceae',
+    difficulty: 'easy',
+    emoji: '🥬',
+    varieties: [{
+      name: 'Curly',
+      description: 'Highly frilly leaves, very tender when young'
+    }, {
+      name: 'Lacinato',
+      description: 'Smooth blue-green leaves, deeply textured'
+    }],
+    sowWindow: {
+      start: '03-01',
+      end: '08-31'
+    },
+    germinationDays: {
+      min: 7,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 55,
+      max: 75
+    },
+    spacing: 30,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['lettuce', 'carrot', 'basil'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 7,
+          max: 10
+        },
+        description: 'Seed in soil',
+        healthIndicators: ['Moderate temperature 15-20°C', 'Consistently moist soil', 'No seed rot'],
+        careTips: ['Start indoors or direct sow', 'Keep soil moist but not waterlogged', 'Kale is cold hardy'],
+        commonIssues: [{
+          issue: 'Poor germination',
+          solutions: ['Ensure consistent moisture', 'Maintain proper temperature', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 7,
+          max: 10
+        },
+        description: 'Sprout emerging',
+        healthIndicators: ['Strong growth', 'Adequate moisture', 'No fungal issues'],
+        careTips: ['Provide light immediately', 'Keep soil moist', 'Temperature 15-20°C ideal', 'Thin seedlings'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'True leaves and plant structure forming',
+        healthIndicators: ['Characteristic kale leaves', 'Sturdy stems', 'Dark green color'],
+        careTips: ['Thin to proper spacing', 'Harden off indoors started seedlings', 'Provide good light', 'Water consistently'],
+        commonIssues: [{
+          issue: 'Damping off',
+          solutions: ['Improve air circulation', 'Reduce humidity', 'Ensure good drainage']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 21,
+          max: 35
+        },
+        description: 'Leaf and stem growth',
+        healthIndicators: ['Multiple leaf layers forming', 'Bushy growth', 'Healthy dark leaves'],
+        careTips: ['Space plants 30cm apart', 'Water deeply and regularly', 'Provide full sun', 'Mulch around plants', 'Avoid excess nitrogen'],
+        commonIssues: [{
+          issue: 'Cabbage worms',
+          solutions: ['Use row covers', 'Hand pick caterpillars', 'Spray with BT']
+        }, {
+          issue: 'Black rot disease',
+          solutions: ['Improve drainage', 'Remove infected leaves', 'Rotate crops']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 28,
+          max: 56
+        },
+        description: 'Flower stalk developing over time',
+        healthIndicators: ['Plant matured', 'Continued leaf growth at base', 'Central stalk rising'],
+        careTips: ['Kale has extended harvest before flowering', 'Can still harvest leaves below flowers', 'Flower buds are edible when young'],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for kale',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 28,
+          max: 84
+        },
+        description: 'Continuous leaf harvesting',
+        healthIndicators: ['Mature leaves formed', 'Tender when young, tougher when older', 'Before flower stalk emerges for best quality'],
+        careTips: ['Start harvesting lower leaves when 6-8 inches long', 'Leave center growing crown intact', 'Harvest regularly for tenderness', 'Flavor improves after light frost', 'Can harvest flower buds when young'],
+        commonIssues: [{
+          issue: 'Tough, bitter leaves',
+          solutions: ['Harvest when younger', 'Expose to light frost for sweetness', 'Maintain consistent watering']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'End of season',
+        healthIndicators: [],
+        careTips: ['Remove spent plant', 'Plant new kale crop for continuous harvest'],
+        commonIssues: []
+      }
+    }
+  },
+  onion: {
+    id: 'onion',
+    species: 'Allium cepa',
+    commonName: 'Onion',
+    family: 'Allium',
+    difficulty: 'moderate',
+    emoji: '🧅',
+    varieties: [{
+      name: 'Yellow',
+      description: 'Storage type, pungent, long keeping'
+    }, {
+      name: 'Red',
+      description: 'Sweet, purple-red, excellent raw'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '04-30'
+    },
+    germinationDays: {
+      min: 10,
+      max: 15
+    },
+    daysToHarvest: {
+      min: 100,
+      max: 120
+    },
+    spacing: 10,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['carrot', 'lettuce', 'tomato'],
+    avoidPlants: ['bean', 'pea'],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 10,
+          max: 15
+        },
+        description: 'Seed in cool soil',
+        healthIndicators: ['Moist soil maintained', 'Temperature 15-20°C', 'No mold growth'],
+        careTips: ['Start indoors 8-10 weeks before transplant', 'Keep soil consistently moist', 'Or plant sets directly', 'Provide light immediately after germination'],
+        commonIssues: [{
+          issue: 'Slow germination',
+          solutions: ['Ensure moisture', 'Increase light', 'Maintain proper temperature']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 10,
+          max: 15
+        },
+        description: 'First shoots breaking through',
+        healthIndicators: ['Sprouts visible', 'Consistent moisture', 'Cool temperature OK'],
+        careTips: ['Provide bright light immediately', 'Keep soil moist', 'Maintain 15-20°C', 'Thin seedlings as they grow'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Thin green shoots developing',
+        healthIndicators: ['Multiple thin shoots per plant', 'Light green color', 'Good root development'],
+        careTips: ['Provide strong light to avoid thin, weak seedlings', 'Keep soil consistently moist', 'Thin aggressively', 'Temperature 15-20°C'],
+        commonIssues: [{
+          issue: 'Leggy, weak seedlings',
+          solutions: ['Increase light intensity', 'Reduce temperature', 'Improve air circulation']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 30,
+          max: 50
+        },
+        description: 'Leaf and root growth phase',
+        healthIndicators: ['Multiple leaves per plant', 'Green, healthy foliage', 'Root system developing underground'],
+        careTips: ['Transplant seedlings to garden when 15-20cm tall', 'Space 10cm apart', 'Plant sets directly', 'Water regularly during growth phase', 'Ensure full sun for bulb development'],
+        commonIssues: [{
+          issue: 'Onion maggots',
+          solutions: ['Use row covers', 'Maintain soil moisture', 'Remove affected plants early']
+        }, {
+          issue: 'Purple blotch disease',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Rotate crops']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for bulbing onions',
+        healthIndicators: [],
+        careTips: ['Remove flower scapes if they form'],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for onions',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 14,
+          max: 42
+        },
+        description: 'Bulbs maturing and drying',
+        healthIndicators: ['Tops falling over and drying', 'Dry papery outer layers', 'Proper color for variety'],
+        careTips: ['Harvest when tops collapse and dry', 'Pull up gently', 'Allow to cure 2-3 weeks in dry location', 'Store in cool, dry place', 'Do not harvest before tops dry'],
+        commonIssues: [{
+          issue: 'Thick necks (won\'t keep)',
+          solutions: ['Reduce nitrogen after bulbing starts', 'Harvest when ready', 'Improve storage conditions']
+        }, {
+          issue: 'Small bulbs',
+          solutions: ['Ensure proper spacing', 'Maintain consistent moisture', 'Provide full sun']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Season complete',
+        healthIndicators: [],
+        careTips: ['Store cured bulbs in cool, dry place', 'Prepare for next crop'],
+        commonIssues: []
+      }
+    }
+  },
+  radish: {
+    id: 'radish',
+    species: 'Raphanus sativus',
+    commonName: 'Radish',
+    family: 'Brassicaceae',
+    difficulty: 'easy',
+    emoji: '🌶️',
+    varieties: [{
+      name: 'Cherry Belle',
+      description: 'Small, round, quick growing (25 days)'
+    }, {
+      name: 'Daikon',
+      description: 'Large, mild, storage type'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '09-30'
+    },
+    germinationDays: {
+      min: 3,
+      max: 7
+    },
+    daysToHarvest: {
+      min: 25,
+      max: 70
+    },
+    spacing: 5,
+    sunRequirements: 'full',
+    wateringNeeds: 'moderate',
+    companionPlants: ['lettuce', 'cucumber', 'spinach'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 3,
+          max: 7
+        },
+        description: 'Seed in soil',
+        healthIndicators: ['Moist soil', 'Temperature 15-20°C', 'No fungal issues'],
+        careTips: ['Direct sow in garden', 'Keep soil consistently moist', 'Sow succession every 2 weeks for continuous harvest', 'Thin seedlings immediately'],
+        commonIssues: [{
+          issue: 'Poor germination',
+          solutions: ['Ensure moisture', 'Maintain cool temperature', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 3,
+          max: 7
+        },
+        description: 'First shoots rapidly emerging',
+        healthIndicators: ['Quick sprout emergence', 'Cotyledons visible within days', 'Vigorous growth'],
+        careTips: ['Thin immediately to avoid crowding', 'Keep soil moist', 'Provide light', 'Can thin again if needed'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'First true leaves and root expansion',
+        healthIndicators: ['True leaves visible', 'Small root visible at soil surface', 'Rapid growth'],
+        careTips: ['Thin aggressively to final spacing', 'Remove every other plant if crowded', 'Keep soil consistently moist', 'Thin to prevent forked roots'],
+        commonIssues: [{
+          issue: 'Forked or malformed radishes',
+          solutions: ['Thin earlier and more aggressively', 'Remove crowded seedlings', 'Maintain consistent moisture']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 14,
+          max: 50
+        },
+        description: 'Foliage growth and root expansion',
+        healthIndicators: ['Green leafy tops', 'Root visible at soil surface', 'Vigorous growth'],
+        careTips: ['Water consistently', 'Avoid excess nitrogen', 'Maintain cool temperature if possible', 'Watch for pests'],
+        commonIssues: [{
+          issue: 'Radish root maggots',
+          solutions: ['Use row covers', 'Remove affected plants', 'Crop rotation']
+        }, {
+          issue: 'Powdery mildew on leaves',
+          solutions: ['Improve air circulation', 'Water at soil level', 'Use sulfur if needed']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable if harvested on time',
+        healthIndicators: [],
+        careTips: ['Harvest before bolting for best quality'],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for radishes',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 3,
+          max: 14
+        },
+        description: 'Radishes mature and ready to pull',
+        healthIndicators: ['Root visible at soil surface', 'Proper size for variety', 'Tender for spring varieties'],
+        careTips: ['Pull when marble to golf ball sized for best tenderness', 'Can harvest as microgreens when 1 inch', 'Use two-hand method to avoid damage', 'Harvest in morning when crisp', 'Daikon can be larger before harvest'],
+        commonIssues: [{
+          issue: 'Hollow, pithy radishes',
+          solutions: ['Harvest earlier', 'Provide consistent moisture', 'Avoid temperature stress']
+        }, {
+          issue: 'Tough, hot flavor',
+          solutions: ['Harvest when smaller', 'Maintain consistent watering', 'Grow in cooler season']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete',
+        healthIndicators: [],
+        careTips: ['Plant succession crop', 'Plant every 2 weeks for continuous harvest'],
+        commonIssues: []
+      }
+    }
+  },
+  broccoli: {
+    id: 'broccoli',
+    species: 'Brassica oleracea var. italica',
+    commonName: 'Broccoli',
+    family: 'Brassicaceae',
+    difficulty: 'moderate',
+    emoji: '🥦',
+    varieties: [{
+      name: 'Calabrese',
+      description: 'Large main heads, classic variety'
+    }, {
+      name: 'Sprouting',
+      description: 'Many small side shoots, extended harvest'
+    }],
+    sowWindow: {
+      start: '03-01',
+      end: '08-31'
+    },
+    germinationDays: {
+      min: 5,
+      max: 10
+    },
+    daysToHarvest: {
+      min: 55,
+      max: 100
+    },
+    spacing: 45,
+    sunRequirements: 'full',
+    wateringNeeds: 'high',
+    companionPlants: ['lettuce', 'carrot', 'basil'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Seed in soil',
+        healthIndicators: ['Moist soil', 'Temperature 15-20°C', 'No mold or fungus'],
+        careTips: ['Start indoors 4-6 weeks before transplant', 'Keep soil consistently moist', 'Provide good light to avoid leggy seedlings'],
+        commonIssues: [{
+          issue: 'Poor germination',
+          solutions: ['Ensure moisture', 'Maintain proper temperature', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 5,
+          max: 10
+        },
+        description: 'Sprouts emerging',
+        healthIndicators: ['Quick growth', 'Adequate moisture', 'Good light exposure'],
+        careTips: ['Provide bright light immediately', 'Temperature 15-20°C', 'Keep soil moist', 'Thin seedlings'],
+        commonIssues: []
+      },
+      seedling: {
+        durationDays: {
+          min: 10,
+          max: 21
+        },
+        description: 'True leaves and growth',
+        healthIndicators: ['True leaves visible', 'Sturdy stems', 'Dark green color'],
+        careTips: ['Provide strong light to prevent leggy growth', 'Keep soil consistently moist', 'Thin or transplant to individual pots', 'Temperature 15-18°C'],
+        commonIssues: [{
+          issue: 'Damping off',
+          solutions: ['Improve air circulation', 'Reduce humidity', 'Use sterile soil']
+        }, {
+          issue: 'Leggy seedlings',
+          solutions: ['Increase light', 'Lower temperature', 'Improve air flow']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 28,
+          max: 42
+        },
+        description: 'Leaf and root growth',
+        healthIndicators: ['Multiple leaves', 'Transplant size (10-15cm)', 'Healthy appearance'],
+        careTips: ['Harden off seedlings before transplant', 'Space plants 45cm apart', 'Provide full sun', 'Water deeply and regularly', 'Mulch around plants'],
+        commonIssues: [{
+          issue: 'Cabbage worms',
+          solutions: ['Use row covers initially', 'Hand pick caterpillars', 'Spray with BT']
+        }, {
+          issue: 'Black rot',
+          solutions: ['Improve drainage', 'Remove infected leaves', 'Crop rotation']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 21,
+          max: 42
+        },
+        description: 'Head formation and maturation',
+        healthIndicators: ['Broccoli head forming', 'Tight green florets', 'Large plant with good foliage'],
+        careTips: ['Provide consistent deep watering', 'Ensure full sun for head development', 'Avoid excessive heat if possible', 'Monitor for pests'],
+        commonIssues: [{
+          issue: 'Small, loose heads',
+          solutions: ['Ensure adequate watering', 'Provide full sun', 'Maintain cool temperatures']
+        }, {
+          issue: 'Yellow florets',
+          solutions: ['Harvest earlier', 'Maintain cooler temps', 'Improve drainage']
+        }]
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for broccoli',
+        healthIndicators: [],
+        careTips: [],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 7,
+          max: 42
+        },
+        description: 'Head ready for harvesting',
+        healthIndicators: ['Main head 4-8 inches diameter', 'Tight green florets', 'Before flowers open'],
+        careTips: ['Cut main head when florets still tightly clustered', 'Cut with 6-8 inches of stalk', 'Sprouting varieties will produce side shoots', 'Continue harvesting side shoots', 'Harvest in morning when cool'],
+        commonIssues: [{
+          issue: 'Premature bolting/flowering',
+          solutions: ['Provide afternoon shade in heat', 'Maintain consistent water', 'Harvest main head promptly']
+        }, {
+          issue: 'Loose, open florets',
+          solutions: ['Harvest earlier', 'Avoid heat stress', 'Ensure adequate water']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Harvest complete or plant end',
+        healthIndicators: [],
+        careTips: ['Remove plant', 'Compost material'],
+        commonIssues: []
+      }
+    }
+  },
+  parsley: {
+    id: 'parsley',
+    species: 'Petroselinum crispum',
+    commonName: 'Parsley',
+    family: 'Apiaceae',
+    difficulty: 'moderate',
+    emoji: '🌿',
+    varieties: [{
+      name: 'Flat Leaf',
+      description: 'Italian parsley, strong flavor, fast growing'
+    }, {
+      name: 'Curly',
+      description: 'Decorative, milder flavor, traditional'
+    }],
+    sowWindow: {
+      start: '02-15',
+      end: '07-31'
+    },
+    germinationDays: {
+      min: 14,
+      max: 28
+    },
+    daysToHarvest: {
+      min: 60,
+      max: 90
+    },
+    spacing: 20,
+    sunRequirements: 'partial',
+    wateringNeeds: 'moderate',
+    companionPlants: ['tomato', 'carrot', 'lettuce'],
+    avoidPlants: [],
+    lifecycle: {
+      planted: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'Seed in soil awaiting germination',
+        healthIndicators: ['Consistently moist soil', 'Temperature 15-20°C', 'No seed decay'],
+        careTips: ['Start indoors 8-10 weeks before transplant', 'Soak seeds 24 hours before planting', 'Very slow germination', 'Keep soil consistently moist'],
+        commonIssues: [{
+          issue: 'Very slow germination',
+          solutions: ['Soak seeds longer', 'Ensure consistent moisture', 'Increase temperature slightly to 20°C', 'Use fresh seed']
+        }]
+      },
+      germinating: {
+        durationDays: {
+          min: 14,
+          max: 28
+        },
+        description: 'First shoots slowly emerging',
+        healthIndicators: ['First cotyledon visible', 'Slow but steady growth', 'Proper moisture maintained'],
+        careTips: ['Keep soil consistently moist throughout long germination', 'Provide light when sprout emerges', 'Do not let soil dry out', 'Patience required'],
+        commonIssues: [{
+          issue: 'Damping off during long germination',
+          solutions: ['Improve air circulation', 'Reduce humidity slightly', 'Use sterile soil']
+        }]
+      },
+      seedling: {
+        durationDays: {
+          min: 21,
+          max: 42
+        },
+        description: 'True leaves developing',
+        healthIndicators: ['First true leaves forming', 'Delicate growth', 'Light green color'],
+        careTips: ['Provide bright light', 'Keep soil consistently moist', 'Thin seedlings carefully', 'Temperature 15-18°C ideal'],
+        commonIssues: [{
+          issue: 'Slow growth',
+          solutions: ['Ensure adequate light', 'Maintain moisture', 'Be patient with parsley']
+        }]
+      },
+      vegetative: {
+        durationDays: {
+          min: 28,
+          max: 56
+        },
+        description: 'Bushy leaf growth',
+        healthIndicators: ['Multiple leaf stems', 'Bushy appearance', 'Dark green foliage'],
+        careTips: ['Harden off before transplant', 'Space 20cm apart', 'Water regularly but not excessively', 'Partial shade OK', 'Mulch around plants'],
+        commonIssues: [{
+          issue: 'Leaf miners',
+          solutions: ['Remove affected leaves', 'Use insecticides if severe', 'Maintain plant health']
+        }, {
+          issue: 'Yellowing leaves',
+          solutions: ['Check drainage', 'Ensure proper spacing', 'Remove lower yellowed leaves']
+        }]
+      },
+      flowering: {
+        durationDays: {
+          min: 28,
+          max: 84
+        },
+        description: 'Flower stalk developing (usually in second year)',
+        healthIndicators: ['Plant reaching maturity', 'Flower buds visible', 'Growth may slow'],
+        careTips: ['Parsley flowers are edible', 'Allow to flower if collecting seeds', 'Otherwise remove for continued leaf harvest'],
+        commonIssues: []
+      },
+      fruiting: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Not applicable for culinary use',
+        healthIndicators: [],
+        careTips: ['If seed saving, allow to develop'],
+        commonIssues: []
+      },
+      harvesting: {
+        durationDays: {
+          min: 30,
+          max: 180
+        },
+        description: 'Continual leaf harvesting for extended period',
+        healthIndicators: ['Multiple new stems growing', 'Healthy green leaves', 'No flowering (if prioritizing leaves)'],
+        careTips: ['Start harvesting outer stems when plant well-established', 'Never remove more than 1/3 of plant at once', 'Harvest frequently to promote bushiness', 'Pinch off flower buds to extend leaf production', 'Can be harvested for 1-2 years before replanting'],
+        commonIssues: [{
+          issue: 'Plant becoming leggy or sparse',
+          solutions: ['Harvest more regularly', 'Pinch stems more frequently', 'Provide better light']
+        }]
+      },
+      done: {
+        durationDays: {
+          min: 0,
+          max: 0
+        },
+        description: 'Plant cycle complete',
+        healthIndicators: [],
+        careTips: ['Remove plant after 1-2 years', 'Start new crop from seed'],
+        commonIssues: []
+      }
+    }
+  }
+};
+
+// ============================================================================
+// SECTION 2: UTILITY FUNCTIONS
+// ============================================================================
+
+const generateId = () => {
+  return Math.random().toString(16).substr(2, 8);
+};
+const formatDate = date => {
+  if (!(date instanceof Date)) {
+    date = new Date(date);
+  }
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${String(date.getDate()).padStart(2, '0')}, ${date.getFullYear()}`;
+};
+const daysBetween = (date1, date2) => {
+  const time1 = new Date(date1).getTime();
+  const time2 = new Date(date2).getTime();
+  return Math.floor(Math.abs((time2 - time1) / (1000 * 60 * 60 * 24)));
+};
+const isInSowWindow = plant => {
+  const today = new Date();
+  const todayStr = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const {
+    start,
+    end
+  } = plant.sowWindow;
+  if (start < end) {
+    return todayStr >= start && todayStr <= end;
+  } else {
+    return todayStr >= start || todayStr <= end;
+  }
+};
+const getStageIndex = stageId => {
+  return LIFECYCLE_STAGES.findIndex(s => s.id === stageId);
+};
+const calculateExpectedMilestones = (plantId, plantedDate) => {
+  const plant = PLANT_DATABASE[plantId];
+  if (!plant) return [];
+  const milestones = [];
+  let currentDate = new Date(plantedDate);
+  let totalDays = 0;
+  const stageIds = ['planted', 'germinating', 'seedling', 'vegetative', 'flowering', 'fruiting', 'harvesting', 'done'];
+  stageIds.forEach((stageId, index) => {
+    const stageMeta = plant.lifecycle[stageId];
+    if (!stageMeta) return;
+    const {
+      min,
+      max
+    } = stageMeta.durationDays;
+    const avgDays = Math.round((min + max) / 2);
+    totalDays += avgDays;
+    const expectedDate = new Date(plantedDate);
+    expectedDate.setDate(expectedDate.getDate() + totalDays);
+    milestones.push({
+      stage: stageId,
+      expectedDate: expectedDate,
+      durationDays: {
+        min,
+        max
+      }
+    });
+  });
+  return milestones;
+};
+const calculateHealthStatus = (plant, milestones, plantedDate) => {
+  const today = new Date();
+  let status = 'healthy';
+  for (let i = 0; i < milestones.length; i++) {
+    const milestone = milestones[i];
+    const daysElapsed = daysBetween(plantedDate, today);
+    const expectedDays = milestone.expectedDate ? daysBetween(plantedDate, milestone.expectedDate) : 0;
+    if (daysElapsed > expectedDays + 14) {
+      status = 'critical';
+      break;
+    } else if (daysElapsed > expectedDays + 7) {
+      status = 'warning';
+    }
+  }
+  return status;
+};
+const getNextCareTasks = (plantId, currentStage, plantedDate) => {
+  const plant = PLANT_DATABASE[plantId];
+  if (!plant) return [];
+  const stageIndex = getStageIndex(currentStage);
+  const stageMeta = plant.lifecycle[currentStage];
+  if (!stageMeta) return [];
+  return stageMeta.careTips || [];
+};
+
+// ============================================================================
+// SECTION 3: DATA PERSISTENCE LAYER (localStorage + Firebase-ready)
+// ============================================================================
+
+const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error('Error reading from localStorage:', error);
+      return initialValue;
+    }
+  });
+  const setValue = value => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch (error) {
+      console.error('Error writing to localStorage:', error);
+    }
+  };
+  return [storedValue, setValue];
+};
+const DataContext = createContext();
+const DataProvider = ({
+  children
+}) => {
+  const [seeds, setSeeds] = useLocalStorage('gardenpal_seeds', []);
+  const [gardens, setGardens] = useLocalStorage('gardenpal_gardens', []);
+  const [tasks, setTasks] = useLocalStorage('gardenpal_tasks', []);
+  const addSeed = useCallback(seed => {
+    const newSeed = {
+      id: generateId(),
+      slotIndex: -1,
+      createdAt: new Date().toISOString(),
+      ...seed
+    };
+    setSeeds(prev => [...prev, newSeed]);
+    return newSeed;
+  }, []);
+  const updateSeed = useCallback((seedId, updates) => {
+    setSeeds(prev => prev.map(s => s.id === seedId ? {
+      ...s,
+      ...updates
+    } : s));
+  }, []);
+  const deleteSeed = useCallback(seedId => {
+    setSeeds(prev => prev.filter(s => s.id !== seedId));
+  }, []);
+  const addGarden = useCallback(garden => {
+    const newGarden = {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      ...garden
+    };
+    setGardens(prev => [...prev, newGarden]);
+    return newGarden;
+  }, []);
+  const updateGarden = useCallback((gardenId, updates) => {
+    setGardens(prev => prev.map(g => g.id === gardenId ? {
+      ...g,
+      ...updates
+    } : g));
+  }, []);
+  const deleteGarden = useCallback(gardenId => {
+    setGardens(prev => prev.filter(g => g.id !== gardenId));
+  }, []);
+  const addTask = useCallback(task => {
+    const newTask = {
+      id: generateId(),
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ...task
+    };
+    setTasks(prev => [...prev, newTask]);
+    return newTask;
+  }, []);
+  const updateTask = useCallback((taskId, updates) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? {
+      ...t,
+      ...updates
+    } : t));
+  }, []);
+  const completeTask = useCallback(taskId => {
+    setTasks(prev => prev.map(t => t.id === taskId ? {
+      ...t,
+      completed: true,
+      completedAt: new Date().toISOString()
+    } : t));
+  }, []);
+  const deleteTask = useCallback(taskId => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+  }, []);
+  const value = {
+    seeds,
+    setSeeds,
+    gardens,
+    setGardens,
+    tasks,
+    setTasks,
+    addSeed,
+    updateSeed,
+    deleteSeed,
+    addGarden,
+    updateGarden,
+    deleteGarden,
+    addTask,
+    updateTask,
+    completeTask,
+    deleteTask
+  };
+  return /*#__PURE__*/React.createElement(DataContext.Provider, {
+    value: value
+  }, children);
+};
+const useData = () => {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error('useData must be used within DataProvider');
+  }
+  return context;
+};
+
+// ============================================================================
+// SECTION 4: NOTIFICATION SYSTEM
+// ============================================================================
+
+const useNotifications = () => {
+  const [notifications, setNotifications] = useState([]);
+  const {
+    seeds,
+    tasks
+  } = useData();
+  const addNotification = useCallback((type, title, message) => {
+    const id = generateId();
+    const notification = {
+      id,
+      type,
+      // 'info', 'warning', 'success', 'error'
+      title,
+      message,
+      timestamp: new Date(),
+      read: false
+    };
+    setNotifications(prev => [notification, ...prev]);
+    if (type !== 'error') {
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }, 5000);
+    }
+    return id;
+  }, []);
+  const dismissNotification = useCallback(id => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Check for important events
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check for seeds expiring soon
+    seeds.forEach(seed => {
+      if (seed.expiryDate) {
+        const expiryDate = seed.expiryDate.split('T')[0];
+        const daysUntilExpiry = daysBetween(today, expiryDate);
+        if (daysUntilExpiry > 0 && daysUntilExpiry <= 30) {
+          addNotification('warning', `${seed.species} expiring soon`, `Seed expires in ${daysUntilExpiry} days`);
+        }
+      }
+    });
+
+    // Check for tasks due today
+    tasks.forEach(task => {
+      if (!task.completed && task.dueDate) {
+        const dueDate = task.dueDate.split('T')[0];
+        if (dueDate === today) {
+          addNotification('info', 'Task due today', task.description);
+        }
+      }
+    });
+  }, [seeds, tasks]);
+  return {
+    notifications,
+    addNotification,
+    dismissNotification,
+    unreadCount
+  };
+};
+
+// ============================================================================
+// SECTION 5: MODAL COMPONENT
+// ============================================================================
+
+const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = 'md'
+}) => {
+  const modalRef = useRef(null);
+  useEffect(() => {
+    const handleEscape = e => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose]);
+  if (!isOpen) return null;
+  const sizeClasses = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-2xl md:max-w-lg max-h-full'
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm",
+    onClick: e => {
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    ref: modalRef,
+    className: `w-full md:w-auto md:rounded-lg rounded-t-2xl bg-white shadow-xl animate-in slide-in-from-bottom-5 duration-300 ${sizeClasses[size]}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between p-6 border-b border-gray-200"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "text-xl font-bold text-gray-900"
+  }, title), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-gray-400 hover:text-gray-600 transition-colors"
+  }, /*#__PURE__*/React.createElement("svg", {
+    className: "w-6 h-6",
+    fill: "none",
+    stroke: "currentColor",
+    viewBox: "0 0 24 24"
+  }, /*#__PURE__*/React.createElement("path", {
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: 2,
+    d: "M6 18L18 6M6 6l12 12"
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "p-6 overflow-y-auto",
+    style: {
+      maxHeight: 'calc(100vh - 200px)'
+    }
+  }, children)));
+};
+
+// ============================================================================
+// SECTION 6: SEED BOX VIEW COMPONENT
+// ============================================================================
+
+const SeedBoxView = () => {
+  const {
+    seeds
+  } = useData();
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [selectedFamily, setSelectedFamily] = useState(null);
+  const slotsUsed = seeds.filter(s => s.slotIndex !== undefined && s.slotIndex !== -1).length;
+  const expiringCount = seeds.filter(s => {
+    if (!s.expiryDate) return false;
+    const daysUntilExpiry = daysBetween(new Date(), new Date(s.expiryDate));
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
+  }).length;
+  const inSowWindow = seeds.filter(s => {
+    const plant = PLANT_DATABASE[s.plantId];
+    return plant && isInSowWindow(plant);
+  }).length;
+  const getSlotSeed = index => {
+    return seeds.find(s => s.slotIndex === index);
+  };
+  const getPlantColor = plantId => {
+    const plant = PLANT_DATABASE[plantId];
+    if (!plant) return PLANT_FAMILIES['Other'];
+    return PLANT_FAMILIES[plant.family] || PLANT_FAMILIES['Other'];
+  };
+  const shouldGlow = seed => {
+    if (!seed) return false;
+    const plant = PLANT_DATABASE[seed.plantId];
+    return plant && isInSowWindow(plant);
+  };
+  const renderSlot = index => {
+    const seed = getSlotSeed(index);
+    const color = seed ? getPlantColor(seed.plantId) : 'transparent';
+    const plant = seed ? PLANT_DATABASE[seed.plantId] : null;
+    const glow = shouldGlow(seed);
+    return /*#__PURE__*/React.createElement("button", {
+      key: `slot-${index}`,
+      onClick: () => setSelectedSlot(index),
+      className: `
+          w-12 h-16 rounded-full flex flex-col items-center justify-center gap-0.5
+          transition-all duration-300 cursor-pointer
+          ${seed ? `text-white font-bold text-xs text-center px-1 ${glow ? 'ring-2 ring-green-400 animate-pulse' : ''}` : 'border-2 border-dashed border-gray-300 text-gray-400 hover:border-green-400'}
+          ${seed ? 'shadow-md hover:shadow-lg' : 'hover:bg-gray-50'}
+        `,
+      style: seed ? {
+        backgroundColor: color
+      } : {}
+    }, seed ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+      className: "text-sm"
+    }, plant?.emoji), /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-semibold"
+    }, plant?.species.split(' ')[0].slice(0, 3).toUpperCase())) : /*#__PURE__*/React.createElement("span", {
+      className: "text-lg"
+    }, "+"));
+  };
+  const renderGrid = () => {
+    const rows = [];
+    let slotIndex = 0;
+    SEED_BOX_LAYOUT.forEach((slotsInRow, rowIndex) => {
+      const rowSlots = [];
+      for (let i = 0; i < slotsInRow; i++) {
+        rowSlots.push(renderSlot(slotIndex));
+        slotIndex++;
+      }
+      const isOffsetRow = slotsInRow === 6;
+      rows.push(/*#__PURE__*/React.createElement("div", {
+        key: `row-${rowIndex}`,
+        className: `flex gap-3 justify-center ${isOffsetRow ? 'ml-6' : ''}`
+      }, rowSlots));
+    });
+    return rows;
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-3 gap-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-blue-50 rounded-lg p-4 text-center"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-blue-600"
+  }, slotsUsed, "/40"), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600 mt-1"
+  }, "Slots Used")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-orange-50 rounded-lg p-4 text-center"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-orange-600"
+  }, expiringCount), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600 mt-1"
+  }, "Expiring Soon")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-green-50 rounded-lg p-4 text-center"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-green-600"
+  }, inSowWindow), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600 mt-1"
+  }, "In Sow Window"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap gap-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSelectedFamily(null),
+    className: `px-3 py-1 rounded-full text-sm font-medium transition-all ${selectedFamily === null ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+  }, "All"), Object.keys(PLANT_FAMILIES).map(family => /*#__PURE__*/React.createElement("button", {
+    key: family,
+    onClick: () => setSelectedFamily(family),
+    className: `px-3 py-1 rounded-full text-sm font-medium transition-all ${selectedFamily === family ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`,
+    style: selectedFamily === family ? {
+      backgroundColor: PLANT_FAMILIES[family]
+    } : {}
+  }, family))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl border-2 border-green-200 p-8 space-y-6"
+  }, renderGrid()), selectedSlot !== null && /*#__PURE__*/React.createElement(SeedSlotModal, {
+    slotIndex: selectedSlot,
+    isOpen: selectedSlot !== null,
+    onClose: () => setSelectedSlot(null)
+  }));
+};
+const SeedSlotModal = ({
+  slotIndex,
+  isOpen,
+  onClose
+}) => {
+  const {
+    seeds,
+    addSeed,
+    updateSeed,
+    deleteSeed
+  } = useData();
+  const seed = seeds.find(s => s.slotIndex === slotIndex);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    plantId: seed?.plantId || '',
+    variety: seed?.variety || '',
+    quantity: seed?.quantity || 1,
+    sowWindowStart: seed?.sowWindowStart || '',
+    sowWindowEnd: seed?.sowWindowEnd || '',
+    expiryDate: seed?.expiryDate || '',
+    notes: seed?.notes || ''
+  });
+  const selectedPlant = PLANT_DATABASE[formData.plantId];
+  const handlePlantChange = plantId => {
+    const plant = PLANT_DATABASE[plantId];
+    setFormData(prev => ({
+      ...prev,
+      plantId,
+      variety: '',
+      sowWindowStart: plant?.sowWindow.start || '',
+      sowWindowEnd: plant?.sowWindow.end || ''
+    }));
+  };
+  const handleSave = () => {
+    if (!formData.plantId) return;
+    if (seed) {
+      updateSeed(seed.id, {
+        ...formData,
+        slotIndex
+      });
+    } else {
+      addSeed({
+        ...formData,
+        slotIndex,
+        plantId: formData.plantId
+      });
+    }
+    onClose();
+  };
+  const handleDelete = () => {
+    if (seed && window.confirm('Delete this seed?')) {
+      deleteSeed(seed.id);
+      onClose();
+    }
+  };
+  if (!isOpen) return null;
+  if (seed && !isEditing) {
+    return /*#__PURE__*/React.createElement(Modal, {
+      isOpen: isOpen,
+      onClose: onClose,
+      title: "Seed Details",
+      size: "md"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "space-y-4"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-gradient-to-br from-green-50 to-blue-50 rounded-lg p-6"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-start justify-between mb-4"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      className: "text-3xl mb-2"
+    }, selectedPlant?.emoji), /*#__PURE__*/React.createElement("h3", {
+      className: "text-2xl font-bold text-gray-900"
+    }, selectedPlant?.commonName), /*#__PURE__*/React.createElement("p", {
+      className: "text-sm text-gray-600 italic"
+    }, selectedPlant?.species)), /*#__PURE__*/React.createElement("span", {
+      className: "px-3 py-1 bg-white rounded-full text-sm font-medium text-gray-700"
+    }, selectedPlant?.family))), /*#__PURE__*/React.createElement("div", {
+      className: "grid grid-cols-2 gap-4"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-gray-50 rounded-lg p-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Variety"), /*#__PURE__*/React.createElement("div", {
+      className: "font-semibold text-gray-900"
+    }, formData.variety || 'N/A')), /*#__PURE__*/React.createElement("div", {
+      className: "bg-gray-50 rounded-lg p-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Quantity"), /*#__PURE__*/React.createElement("div", {
+      className: "font-semibold text-gray-900"
+    }, formData.quantity)), /*#__PURE__*/React.createElement("div", {
+      className: "bg-gray-50 rounded-lg p-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Sow Window"), /*#__PURE__*/React.createElement("div", {
+      className: "font-semibold text-gray-900"
+    }, formData.sowWindowStart, " to ", formData.sowWindowEnd)), /*#__PURE__*/React.createElement("div", {
+      className: `rounded-lg p-3 ${isInSowWindow(selectedPlant) ? 'bg-green-100' : 'bg-gray-100'}`
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Status"), /*#__PURE__*/React.createElement("div", {
+      className: `font-semibold ${isInSowWindow(selectedPlant) ? 'text-green-700' : 'text-gray-600'}`
+    }, isInSowWindow(selectedPlant) ? '✓ In Season' : 'Off Season'))), formData.expiryDate && /*#__PURE__*/React.createElement("div", {
+      className: `rounded-lg p-3 ${daysBetween(new Date(), new Date(formData.expiryDate)) <= 30 ? 'bg-red-100' : 'bg-gray-50'}`
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Expires"), /*#__PURE__*/React.createElement("div", {
+      className: `font-semibold ${daysBetween(new Date(), new Date(formData.expiryDate)) <= 30 ? 'text-red-700' : 'text-gray-700'}`
+    }, formatDate(formData.expiryDate), " (", daysBetween(new Date(), new Date(formData.expiryDate)), " days)")), formData.notes && /*#__PURE__*/React.createElement("div", {
+      className: "bg-blue-50 rounded-lg p-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs text-gray-600 mb-1"
+    }, "Notes"), /*#__PURE__*/React.createElement("div", {
+      className: "text-sm text-gray-700"
+    }, formData.notes)), /*#__PURE__*/React.createElement("div", {
+      className: "flex gap-3 pt-4"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setIsEditing(true),
+      className: "flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition-colors"
+    }, "Edit"), /*#__PURE__*/React.createElement("button", {
+      onClick: handleDelete,
+      className: "flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition-colors"
+    }, "Delete"))));
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    isOpen: isOpen,
+    onClose: onClose,
+    title: seed ? 'Edit Seed' : 'Add Seed',
+    size: "md"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Plant Species"), /*#__PURE__*/React.createElement("select", {
+    value: formData.plantId,
+    onChange: e => handlePlantChange(e.target.value),
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Select a plant..."), Object.values(PLANT_DATABASE).map(plant => /*#__PURE__*/React.createElement("option", {
+    key: plant.id,
+    value: plant.id
+  }, plant.emoji, " ", plant.commonName, " (", plant.species, ")")))), selectedPlant && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Variety"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: formData.variety,
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      variety: e.target.value
+    })),
+    placeholder: "e.g., Cherry, Beefsteak",
+    list: "varieties",
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  }), /*#__PURE__*/React.createElement("datalist", {
+    id: "varieties"
+  }, selectedPlant.varieties.map((v, i) => /*#__PURE__*/React.createElement("option", {
+    key: i,
+    value: v.name
+  })))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Quantity"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "1",
+    value: formData.quantity,
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      quantity: parseInt(e.target.value) || 1
+    })),
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Sow Start"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: formData.sowWindowStart,
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      sowWindowStart: e.target.value
+    })),
+    placeholder: "MM-DD",
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Sow End"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: formData.sowWindowEnd,
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      sowWindowEnd: e.target.value
+    })),
+    placeholder: "MM-DD",
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Expiry Date"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: formData.expiryDate ? formData.expiryDate.split('T')[0] : '',
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      expiryDate: e.target.value
+    })),
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-semibold text-gray-700 mb-2"
+  }, "Notes"), /*#__PURE__*/React.createElement("textarea", {
+    value: formData.notes,
+    onChange: e => setFormData(prev => ({
+      ...prev,
+      notes: e.target.value
+    })),
+    placeholder: "Any notes about this seed...",
+    rows: "3",
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3 pt-4"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleSave,
+    className: "flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+  }, "Save Seed")))));
+};
+
+// ========================================
+// PART 2: GARDEN, TIMELINE, AND MAIN VIEWS
+// ========================================
+
+/**
+ * PlantTimeline Component
+ * Shows a horizontal timeline of plant lifecycle stages
+ */
+const PlantTimeline = ({
+  plant,
+  plantInfo
+}) => {
+  const [tooltipStage, setTooltipStage] = React.useState(null);
+  const [tooltipPos, setTooltipPos] = React.useState(null);
+  const handleStageClick = (e, stageIndex) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltipStage(stageIndex);
+    setTooltipPos({
+      top: rect.top - 10,
+      left: rect.left + rect.width / 2
+    });
+  };
+  const currentStageIndex = getStageIndex(plant.currentStage);
+  const stageColor = PLANT_FAMILIES[plantInfo?.family] || '#22c55e';
+  return /*#__PURE__*/React.createElement("div", {
+    className: "w-full"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-lg font-bold text-gray-800 mb-6"
+  }, "Lifecycle Timeline"), /*#__PURE__*/React.createElement("div", {
+    className: "relative px-4 py-8"
+  }, /*#__PURE__*/React.createElement("svg", {
+    className: "w-full h-24",
+    style: {
+      minHeight: '100px'
+    }
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "20",
+    y1: "50%",
+    x2: "100%",
+    y2: "50%",
+    stroke: "#e5e7eb",
+    strokeWidth: "2"
+  }), LIFECYCLE_STAGES.map((stage, idx) => {
+    const x = (idx + 1) / (LIFECYCLE_STAGES.length + 1) * 100 + '%';
+    const isPast = idx < currentStageIndex;
+    const isCurrent = idx === currentStageIndex;
+    const fill = isPast || isCurrent ? stageColor : '#f3f4f6';
+    const stroke = isPast || isCurrent ? stageColor : '#d1d5db';
+    return /*#__PURE__*/React.createElement("g", {
+      key: idx
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx: x,
+      cy: "50%",
+      r: "12",
+      fill: fill,
+      stroke: stroke,
+      strokeWidth: "2",
+      style: {
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        ...(isCurrent && {
+          animation: 'pulse 2s infinite',
+          filter: 'drop-shadow(0 0 8px rgba(34, 197, 94, 0.6))'
+        })
+      },
+      onClick: e => handleStageClick(e, idx),
+      className: "hover:r-14 transition-all"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: x,
+      y: "70%",
+      textAnchor: "middle",
+      fontSize: "11",
+      fill: "#6b7280",
+      style: {
+        pointerEvents: 'none'
+      }
+    }, stage.label ? stage.label.substring(0, 3) : ''));
+  })), tooltipStage !== null && /*#__PURE__*/React.createElement("div", {
+    className: "absolute bg-gray-900 text-white px-3 py-2 rounded-lg text-xs shadow-lg z-10 -translate-x-1/2",
+    style: {
+      left: tooltipPos.left,
+      top: tooltipPos.top - 60
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "font-semibold"
+  }, LIFECYCLE_STAGES[tooltipStage]?.label), plantInfo?.lifecycle?.[LIFECYCLE_STAGES[tooltipStage]?.id]?.careTips?.[0] && /*#__PURE__*/React.createElement("div", {
+    className: "mt-1 text-gray-200"
+  }, plantInfo.lifecycle[LIFECYCLE_STAGES[tooltipStage].id].careTips[0]), /*#__PURE__*/React.createElement("div", {
+    className: "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full border-4 border-transparent border-t-gray-900"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "mt-6 space-y-2 px-4"
+  }, /*#__PURE__*/React.createElement("h4", {
+    className: "font-semibold text-gray-700"
+  }, "Key Dates"), plant.milestones && plant.milestones.slice(0, 3).map((milestone, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    className: "flex justify-between text-sm text-gray-600"
+  }, /*#__PURE__*/React.createElement("span", null, milestone.stage), /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-400"
+  }, milestone.actualDate ? formatDate(milestone.actualDate) : `Expected: ${formatDate(milestone.expectedDate)}`)))), /*#__PURE__*/React.createElement("style", null, `
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+      `));
+};
+
+/**
+ * HealthIndicator Component
+ * Shows health status with colored badge and current stage indicators
+ */
+const HealthIndicator = ({
+  status = 'healthy',
+  currentStage,
+  plantInfo
+}) => {
+  const statusConfig = {
+    healthy: {
+      color: 'bg-green-100',
+      textColor: 'text-green-800',
+      label: 'Healthy'
+    },
+    warning: {
+      color: 'bg-yellow-100',
+      textColor: 'text-yellow-800',
+      label: 'Needs Attention'
+    },
+    critical: {
+      color: 'bg-red-100',
+      textColor: 'text-red-800',
+      label: 'Critical'
+    }
+  };
+  const config = statusConfig[status] || statusConfig.healthy;
+  const stageData = plantInfo?.lifecycle?.[currentStage];
+  const indicators = stageData?.healthIndicators || [];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: `${config.color} ${config.textColor} px-4 py-3 rounded-lg font-semibold text-center`
+  }, config.label), status !== 'healthy' && /*#__PURE__*/React.createElement("div", {
+    className: "bg-red-50 border-l-4 border-red-400 p-4 rounded"
+  }, /*#__PURE__*/React.createElement("h4", {
+    className: "font-semibold text-red-800 mb-2"
+  }, "\u26A0\uFE0F Common Issues"), /*#__PURE__*/React.createElement("ul", {
+    className: "text-sm text-red-700 space-y-1"
+  }, stageData?.commonIssues?.slice(0, 2).map((issue, idx) => /*#__PURE__*/React.createElement("li", {
+    key: idx,
+    className: "flex items-start gap-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-red-400 mt-0.5"
+  }, "\u2022"), /*#__PURE__*/React.createElement("span", null, issue.issue, ": ", issue.solutions?.[0]))))), indicators.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h4", {
+    className: "font-semibold text-gray-700 mb-2"
+  }, "Stage Indicators"), /*#__PURE__*/React.createElement("ul", {
+    className: "space-y-1 text-sm text-gray-600"
+  }, indicators.map((indicator, idx) => /*#__PURE__*/React.createElement("li", {
+    key: idx,
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-green-500"
+  }, "\u2713"), indicator)))));
+};
+
+/**
+ * GardenSquare Component
+ * Individual square in a garden grid
+ */
+const GardenSquare = ({
+  square,
+  gardenId,
+  boxSize,
+  onClick
+}) => {
+  const {
+    gardens
+  } = useData();
+  const garden = gardens.find(g => g.id === gardenId);
+  const plantInfo = square.plantId ? PLANT_DATABASE[square.plantId] : null;
+  if (!square.plantId) {
+    return /*#__PURE__*/React.createElement("button", {
+      onClick: onClick,
+      className: "aspect-square bg-white border-2 border-dashed border-green-300 rounded-lg flex items-center justify-center text-3xl hover:border-green-500 hover:bg-green-50 transition-all cursor-pointer"
+    }, "+");
+  }
+  const stageColor = PLANT_FAMILIES[plantInfo?.family] || '#22c55e';
+  const stageIndex = getStageIndex(square.currentStage);
+  const progressPercent = (stageIndex + 1) / LIFECYCLE_STAGES.length * 100;
+  const healthColors = {
+    healthy: 'bg-green-500',
+    warning: 'bg-yellow-500',
+    critical: 'bg-red-500'
+  };
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    className: "aspect-square bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all flex flex-col relative",
+    style: {
+      borderTop: `4px solid ${stageColor}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 flex flex-col items-center justify-center p-2 gap-1"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-3xl"
+  }, plantInfo?.emoji || '🌱'), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs font-semibold text-gray-800 text-center line-clamp-2"
+  }, plantInfo?.commonName), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs text-gray-500"
+  }, square.currentStage)), /*#__PURE__*/React.createElement("div", {
+    className: "absolute top-2 right-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: `w-3 h-3 rounded-full ${healthColors[square.health || 'healthy']}`
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "w-full h-1 bg-gray-200"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "h-full transition-all duration-500",
+    style: {
+      width: `${progressPercent}%`,
+      backgroundColor: stageColor
+    }
+  })));
+};
+
+/**
+ * GardenBox Component
+ * A single garden box with multiple squares
+ */
+const GardenBox = ({
+  garden,
+  onEdit,
+  onDelete,
+  onSquareClick
+}) => {
+  const [isEditingName, setIsEditingName] = React.useState(false);
+  const [editName, setEditName] = React.useState(garden.name);
+  const {
+    updateGarden
+  } = useData();
+  const handleNameSave = async () => {
+    await updateGarden(garden.id, {
+      name: editName
+    });
+    setIsEditingName(false);
+  };
+  const getGridColumns = () => {
+    const cols = {
+      '1x1': 1,
+      '2x2': 2,
+      '2x4': 4,
+      '4x4': 4
+    };
+    return cols[garden.gridType] || 2;
+  };
+  const gridColumns = getGridColumns();
+  return /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-lg shadow-lg overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50"
+  }, isEditingName ? /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: editName,
+    onChange: e => setEditName(e.target.value),
+    onBlur: handleNameSave,
+    onKeyDown: e => e.key === 'Enter' && handleNameSave(),
+    autoFocus: true,
+    className: "flex-1 px-2 py-1 border border-green-300 rounded focus:ring-2 focus:ring-green-500"
+  }) : /*#__PURE__*/React.createElement("h3", {
+    onClick: () => setIsEditingName(true),
+    className: "text-lg font-bold text-gray-800 cursor-pointer hover:text-green-600 transition-colors"
+  }, garden.name), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDelete(garden.id),
+    className: "ml-4 text-red-500 hover:text-red-700 text-xl transition-colors"
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "p-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "gap-3",
+    style: {
+      display: 'grid',
+      gridTemplateColumns: `repeat(${gridColumns}, 1fr)`
+    }
+  }, garden.squares.map((square, idx) => /*#__PURE__*/React.createElement(GardenSquare, {
+    key: idx,
+    square: square,
+    gardenId: garden.id,
+    boxSize: garden.gridType,
+    onClick: () => onSquareClick(garden.id, idx)
+  })))));
+};
+
+/**
+ * PlantDetailModal Component
+ * Shows detailed information about a planted square or plant selection
+ */
+const PlantDetailModal = ({
+  isOpen,
+  onClose,
+  garden,
+  squareIndex
+}) => {
+  const {
+    updateGarden,
+    addTask
+  } = useData();
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedPlant, setSelectedPlant] = React.useState(null);
+  const [plantNotes, setPlantNotes] = React.useState('');
+  const [newStage, setNewStage] = React.useState(null);
+  if (!isOpen || !garden) return null;
+  const square = garden.squares[squareIndex];
+  const plantInfo = square?.plantId ? PLANT_DATABASE[square.plantId] : null;
+  const isEmpty = !square?.plantId;
+  const handlePlantSelect = async plant => {
+    const now = new Date().toISOString();
+    const newSquare = {
+      plantId: plant.id,
+      plantedDate: now,
+      currentStage: 'planted',
+      health: 'healthy',
+      notes: plantNotes,
+      milestones: calculateExpectedMilestones(now, plant)
+    };
+    const updatedGarden = {
+      ...garden,
+      squares: garden.squares.map((sq, idx) => idx === squareIndex ? newSquare : sq)
+    };
+    await updateGarden(garden.id, updatedGarden);
+
+    // Create initial care tasks from care tips
+    const careTips = getNextCareTasks(plant.id, newSquare.currentStage, newSquare.plantedDate);
+    for (const tip of careTips.slice(0, 2)) {
+      await addTask({
+        gardenId: garden.id,
+        squareIndex,
+        plantId: plant.id,
+        type: 'care',
+        description: tip,
+        dueDate: new Date(Date.now() + 3 * 86400000).toISOString(),
+        completed: false
+      });
+    }
+    onClose();
+  };
+  const handleAdvanceStage = async () => {
+    const currentIdx = getStageIndex(square.currentStage);
+    const nextStage = LIFECYCLE_STAGES[currentIdx + 1] || square.currentStage;
+    const updatedSquare = {
+      ...square,
+      currentStage: nextStage,
+      milestones: square.milestones?.map(m => m.stage === nextStage ? {
+        ...m,
+        actualDate: new Date().toISOString()
+      } : m) || []
+    };
+    const updatedGarden = {
+      ...garden,
+      squares: garden.squares.map((sq, idx) => idx === squareIndex ? updatedSquare : sq)
+    };
+    await updateGarden(garden.id, updatedGarden);
+
+    // Add new care tasks for this stage
+    const careTips = getNextCareTasks(square.plantId, nextStage, square.plantedDate);
+    for (const tip of careTips.slice(0, 2)) {
+      await addTask({
+        gardenId: garden.id,
+        squareIndex,
+        plantId: square.plantId,
+        type: 'care',
+        description: tip,
+        dueDate: new Date(Date.now() + 3 * 86400000).toISOString(),
+        completed: false
+      });
+    }
+  };
+  const handleRemovePlant = async () => {
+    if (window.confirm('Remove this plant from the garden?')) {
+      const updatedSquare = {
+        plantId: null,
+        plantedDate: null,
+        currentStage: 'empty',
+        health: 'healthy',
+        notes: '',
+        milestones: []
+      };
+      const updatedGarden = {
+        ...garden,
+        squares: garden.squares.map((sq, idx) => idx === squareIndex ? updatedSquare : sq)
+      };
+      await updateGarden(garden.id, updatedGarden);
+      onClose();
+    }
+  };
+  const filteredPlants = Object.values(PLANT_DATABASE).filter(p => (p.commonName || '').toLowerCase().includes(searchTerm.toLowerCase()) || p.varieties?.some(v => (v.name || v).toLowerCase().includes(searchTerm.toLowerCase())));
+  return /*#__PURE__*/React.createElement(Modal, {
+    isOpen: isOpen,
+    onClose: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+  }, isEmpty ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("h2", {
+    className: "text-2xl font-bold text-gray-800 mb-4"
+  }, "Plant a Seed"), /*#__PURE__*/React.createElement("div", {
+    className: "mb-4"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Search plants...",
+    value: searchTerm,
+    onChange: e => setSearchTerm(e.target.value),
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2 mb-6 max-h-48 overflow-y-auto"
+  }, filteredPlants.map(plant => /*#__PURE__*/React.createElement("button", {
+    key: plant.id,
+    onClick: () => setSelectedPlant(plant),
+    className: "w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-400 transition-all"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-2xl"
+  }, plant.emoji), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "font-semibold text-gray-800"
+  }, plant.commonName), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm text-gray-600"
+  }, plant.varieties?.map(v => v.name).join(', ') || 'Classic')))))), selectedPlant && /*#__PURE__*/React.createElement("div", {
+    className: "bg-green-50 p-4 rounded-lg mb-4 border border-green-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-green-900 mb-2"
+  }, "Planting ", selectedPlant.commonName), /*#__PURE__*/React.createElement("textarea", {
+    placeholder: "Add notes (optional)",
+    value: plantNotes,
+    onChange: e => setPlantNotes(e.target.value),
+    className: "w-full px-3 py-2 border border-green-300 rounded mb-3 focus:ring-2 focus:ring-green-500",
+    rows: "2"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSelectedPlant(null),
+    className: "flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handlePlantSelect(selectedPlant),
+    className: "flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+  }, "Plant Now")))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3 mb-4"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-5xl"
+  }, plantInfo?.emoji), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    className: "text-2xl font-bold text-gray-800"
+  }, plantInfo?.commonName), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mt-1"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded"
+  }, square.currentStage), /*#__PURE__*/React.createElement("span", {
+    className: "px-2 py-1 text-white text-xs font-semibold rounded",
+    style: {
+      backgroundColor: PLANT_FAMILIES[plantInfo?.family]
+    }
+  }, plantInfo?.family)))), square.notes && /*#__PURE__*/React.createElement("p", {
+    className: "text-gray-600 text-sm bg-gray-50 p-3 rounded-lg mb-4"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "Notes:"), " ", square.notes)), /*#__PURE__*/React.createElement(PlantTimeline, {
+    plant: square,
+    plantInfo: plantInfo
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "mt-6"
+  }, /*#__PURE__*/React.createElement(HealthIndicator, {
+    status: square.health,
+    currentStage: square.currentStage,
+    plantInfo: plantInfo
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "mt-6 bg-blue-50 p-4 rounded-lg border border-blue-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-blue-900 mb-2"
+  }, "\uD83C\uDF31 Care Tips"), /*#__PURE__*/React.createElement("ul", {
+    className: "text-blue-800 text-sm space-y-1"
+  }, (plantInfo?.lifecycle?.[square.currentStage]?.careTips || ['Keep the soil consistently moist.']).map((tip, idx) => /*#__PURE__*/React.createElement("li", {
+    key: idx,
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("span", null, "\u2022"), /*#__PURE__*/React.createElement("span", null, tip))))), plantInfo?.lifecycle?.[square.currentStage]?.commonIssues?.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mt-6 bg-red-50 p-4 rounded-lg border border-red-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-red-900 mb-2"
+  }, "\u26A0\uFE0F Common Issues"), /*#__PURE__*/React.createElement("ul", {
+    className: "text-sm text-red-800 space-y-2"
+  }, plantInfo.lifecycle[square.currentStage].commonIssues.map((issue, idx) => /*#__PURE__*/React.createElement("li", {
+    key: idx
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, issue.issue, ":"), " ", issue.solutions?.[0])))), /*#__PURE__*/React.createElement("div", {
+    className: "mt-6 space-y-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleAdvanceStage,
+    disabled: getStageIndex(square.currentStage) >= LIFECYCLE_STAGES.length - 1,
+    className: "w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
+  }, "\u2713 Advance to Next Stage"), /*#__PURE__*/React.createElement("select", {
+    onChange: e => {
+      if (e.target.value === 'healthy') {
+        const updated = {
+          ...garden,
+          squares: garden.squares.map((sq, idx) => idx === squareIndex ? {
+            ...sq,
+            health: 'healthy'
+          } : sq)
+        };
+        updateGarden(garden.id, updated);
+      } else if (e.target.value === 'warning') {
+        const updated = {
+          ...garden,
+          squares: garden.squares.map((sq, idx) => idx === squareIndex ? {
+            ...sq,
+            health: 'warning'
+          } : sq)
+        };
+        updateGarden(garden.id, updated);
+      } else if (e.target.value === 'critical') {
+        const updated = {
+          ...garden,
+          squares: garden.squares.map((sq, idx) => idx === squareIndex ? {
+            ...sq,
+            health: 'critical'
+          } : sq)
+        };
+        updateGarden(garden.id, updated);
+      }
+    },
+    defaultValue: square.health,
+    className: "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "healthy"
+  }, "\u2713 Healthy"), /*#__PURE__*/React.createElement("option", {
+    value: "warning"
+  }, "\u26A0\uFE0F Needs Attention"), /*#__PURE__*/React.createElement("option", {
+    value: "critical"
+  }, "\u274C Critical")), /*#__PURE__*/React.createElement("button", {
+    onClick: handleRemovePlant,
+    className: "w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-semibold"
+  }, "\uD83D\uDDD1\uFE0F Remove Plant")))));
+};
+
+/**
+ * GardenManagerView Component
+ * Main view for managing garden boxes
+ */
+const GardenManagerView = () => {
+  const {
+    gardens,
+    addGarden,
+    updateGarden,
+    deleteGarden
+  } = useData();
+  const {
+    addNotification
+  } = useNotifications();
+  const [showNewGarden, setShowNewGarden] = React.useState(false);
+  const [newGardenName, setNewGardenName] = React.useState('');
+  const [newGardenType, setNewGardenType] = React.useState('2x2');
+  const [selectedSquare, setSelectedSquare] = React.useState(null);
+  const handleAddGarden = async () => {
+    if (!newGardenName.trim()) {
+      addNotification('warning', 'Missing Name', 'Please enter a garden name');
+      return;
+    }
+    const gridSizes = {
+      '1x1': 1,
+      '2x2': 4,
+      '2x4': 8,
+      '4x4': 16
+    };
+    const squares = Array(gridSizes[newGardenType]).fill(null).map(() => ({
+      plantId: null,
+      plantedDate: null,
+      currentStage: 'empty',
+      health: 'healthy',
+      notes: '',
+      milestones: []
+    }));
+    await addGarden({
+      name: newGardenName,
+      gridType: newGardenType,
+      squares,
+      createdDate: new Date().toISOString()
+    });
+    addNotification('success', 'Garden Created', `${newGardenName} garden created!`);
+    setNewGardenName('');
+    setShowNewGarden(false);
+  };
+  const handleDeleteGarden = async gardenId => {
+    if (window.confirm('Delete this entire garden box?')) {
+      await deleteGarden(gardenId);
+      addNotification('info', 'Deleted', 'Garden deleted');
+    }
+  };
+  const totalPlants = gardens.reduce((sum, g) => sum + g.squares.filter(s => s.plantId).length, 0);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("h1", {
+    className: "text-3xl font-bold text-gray-800"
+  }, "\uD83C\uDF3F My Garden"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowNewGarden(!showNewGarden),
+    className: "px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+  }, "+ New Box")), showNewGarden && /*#__PURE__*/React.createElement("div", {
+    className: "bg-green-50 p-4 rounded-lg border border-green-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-800 mb-3"
+  }, "Create New Garden Box"), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-3"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Garden name (e.g., 'Kitchen Herbs', 'Backyard Veggies')",
+    value: newGardenName,
+    onChange: e => setNewGardenName(e.target.value),
+    className: "w-full px-4 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-4 gap-2"
+  }, ['1x1', '2x2', '2x4', '4x4'].map(type => /*#__PURE__*/React.createElement("button", {
+    key: type,
+    onClick: () => setNewGardenType(type),
+    className: `px-3 py-2 rounded-lg font-semibold transition-colors ${newGardenType === type ? 'bg-green-600 text-white' : 'bg-white border border-green-300 text-gray-700 hover:bg-green-50'}`
+  }, type))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowNewGarden(false),
+    className: "flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAddGarden,
+    className: "flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+  }, "Create Garden")))), gardens.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-4 gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-green-600"
+  }, gardens.length), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Garden Boxes")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-blue-600"
+  }, totalPlants), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Plants")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-yellow-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-yellow-600"
+  }, gardens.reduce((sum, g) => sum + g.squares.filter(s => s.health === 'warning').length, 0)), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Needs Care")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-red-600"
+  }, gardens.reduce((sum, g) => sum + g.squares.filter(s => s.health === 'critical').length, 0)), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Critical"))), gardens.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-6xl mb-4 block"
+  }, "\uD83C\uDF31"), /*#__PURE__*/React.createElement("h3", {
+    className: "text-xl font-semibold text-gray-700 mb-2"
+  }, "No gardens yet"), /*#__PURE__*/React.createElement("p", {
+    className: "text-gray-600 mb-4"
+  }, "Start by creating your first garden box!"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowNewGarden(true),
+    className: "px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+  }, "+ Create First Garden")) : /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 lg:grid-cols-2 gap-6"
+  }, gardens.map(garden => /*#__PURE__*/React.createElement("div", {
+    key: garden.id
+  }, /*#__PURE__*/React.createElement(GardenBox, {
+    garden: garden,
+    onDelete: handleDeleteGarden,
+    onSquareClick: (gardenId, squareIdx) => setSelectedSquare({
+      gardenId,
+      squareIdx
+    })
+  })))), selectedSquare && /*#__PURE__*/React.createElement(PlantDetailModal, {
+    isOpen: true,
+    onClose: () => setSelectedSquare(null),
+    garden: gardens.find(g => g.id === selectedSquare.gardenId),
+    squareIndex: selectedSquare.squareIdx
+  }));
+};
+
+/**
+ * TaskItem Component
+ * Individual task in the task list
+ */
+const TaskItem = ({
+  task,
+  onComplete,
+  onDelete
+}) => {
+  const {
+    gardens
+  } = useData();
+  const garden = gardens.find(g => g.id === task.gardenId);
+  const square = garden?.squares[task.squareIndex];
+  const plantInfo = square?.plantId ? PLANT_DATABASE[square.plantId] : null;
+  const dueDate = new Date(task.dueDate);
+  const today = new Date();
+  const isOverdue = dueDate < today && !task.completed;
+  const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+  const priorityConfig = {
+    high: {
+      color: 'bg-red-100',
+      textColor: 'text-red-800',
+      icon: '🔴'
+    },
+    medium: {
+      color: 'bg-yellow-100',
+      textColor: 'text-yellow-800',
+      icon: '🟡'
+    },
+    low: {
+      color: 'bg-green-100',
+      textColor: 'text-green-800',
+      icon: '🟢'
+    }
+  };
+  const priority = daysUntilDue <= 1 ? 'high' : daysUntilDue <= 3 ? 'medium' : 'low';
+  const config = priorityConfig[priority];
+  return /*#__PURE__*/React.createElement("div", {
+    className: `p-4 border-l-4 rounded-lg transition-all ${isOverdue ? 'bg-red-50 border-l-red-500' : 'bg-white border-l-green-500'} ${task.completed ? 'opacity-60' : ''}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start gap-3"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: task.completed,
+    onChange: () => onComplete(task.id),
+    className: "w-5 h-5 rounded text-green-600 cursor-pointer mt-1 accent-green-600"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-1"
+  }, /*#__PURE__*/React.createElement("span", null, plantInfo?.emoji), /*#__PURE__*/React.createElement("span", {
+    className: `font-semibold ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`
+  }, task.description), /*#__PURE__*/React.createElement("span", {
+    className: `px-2 py-0.5 text-xs font-semibold rounded ${config.color} ${config.textColor}`
+  }, config.icon)), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm text-gray-600"
+  }, plantInfo?.commonName, " \u2022 ", garden?.name), /*#__PURE__*/React.createElement("div", {
+    className: `text-xs mt-1 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`
+  }, isOverdue ? `Overdue by ${Math.abs(daysUntilDue)} days` : `Due in ${daysUntilDue} days`)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDelete(task.id),
+    className: "text-gray-400 hover:text-red-600 text-xl transition-colors"
+  }, "\u2715")));
+};
+
+/**
+ * TaskDashboard Component
+ * Shows all tasks with filtering and organization
+ */
+const TaskDashboard = () => {
+  const {
+    tasks,
+    updateTask,
+    deleteTask
+  } = useData();
+  const [filterType, setFilterType] = React.useState('today');
+  const getFilteredTasks = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return tasks.filter(task => {
+      if (task.completed) return false;
+      const dueDate = new Date(task.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      switch (filterType) {
+        case 'today':
+          return dueDate.getTime() === today.getTime();
+        case 'week':
+          const weekEnd = new Date(today);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+          return dueDate >= today && dueDate <= weekEnd;
+        case 'overdue':
+          return dueDate < today;
+        default:
+          return true;
+      }
+    });
+  };
+  const groupedTasks = {};
+  getFilteredTasks().forEach(task => {
+    const date = formatDate(task.dueDate);
+    if (!groupedTasks[date]) {
+      groupedTasks[date] = [];
+    }
+    groupedTasks[date].push(task);
+  });
+  const completedThisWeek = tasks.filter(t => {
+    const completed = t.completed;
+    const dueDate = new Date(t.dueDate);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return completed && dueDate >= weekAgo;
+  }).length;
+  const overdueCount = tasks.filter(t => {
+    const dueDate = new Date(t.dueDate);
+    const today = new Date();
+    return !t.completed && dueDate < today;
+  }).length;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
+    className: "text-3xl font-bold text-gray-800"
+  }, "\uD83D\uDCCB Tasks")), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-3 gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-blue-600"
+  }, getFilteredTasks().length), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Due Soon")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-green-600"
+  }, completedThisWeek), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Completed")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-2xl font-bold text-red-600"
+  }, overdueCount), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-600"
+  }, "Overdue"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 overflow-x-auto pb-2"
+  }, ['today', 'week', 'overdue', 'all'].map(type => /*#__PURE__*/React.createElement("button", {
+    key: type,
+    onClick: () => setFilterType(type),
+    className: `px-4 py-2 rounded-lg font-semibold whitespace-nowrap transition-colors ${filterType === type ? 'bg-green-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`
+  }, type.charAt(0).toUpperCase() + type.slice(1)))), getFilteredTasks().length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-6xl mb-4 block"
+  }, "\u2713"), /*#__PURE__*/React.createElement("h3", {
+    className: "text-xl font-semibold text-gray-700 mb-2"
+  }, "No tasks"), /*#__PURE__*/React.createElement("p", {
+    className: "text-gray-600"
+  }, "You're all caught up! Great work!")) : /*#__PURE__*/React.createElement("div", {
+    className: "space-y-4"
+  }, Object.entries(groupedTasks).map(([date, dateTasks]) => /*#__PURE__*/React.createElement("div", {
+    key: date
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-sm font-semibold text-gray-600 mb-2 px-4"
+  }, date), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, dateTasks.map(task => /*#__PURE__*/React.createElement(TaskItem, {
+    key: task.id,
+    task: task,
+    onComplete: taskId => updateTask(taskId, {
+      completed: !task.completed
+    }),
+    onDelete: () => deleteTask(task.id)
+  })))))));
+};
+
+/**
+ * SettingsView Component
+ * App settings and configuration
+ */
+const SettingsView = () => {
+  const {
+    tasks,
+    seeds,
+    gardens
+  } = useData();
+  const {
+    addNotification
+  } = useNotifications();
+  const [firebaseConfig, setFirebaseConfig] = React.useState({
+    apiKey: localStorage.getItem('firebase_apiKey') || '',
+    projectId: localStorage.getItem('firebase_projectId') || '',
+    appId: localStorage.getItem('firebase_appId') || ''
+  });
+  const handleExportData = () => {
+    const data = {
+      seeds,
+      gardens,
+      tasks,
+      exportDate: new Date().toISOString()
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gardenpal-backup-${formatDate(new Date()).split(' ')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addNotification('success', 'Export', 'Data exported!');
+  };
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure? This will delete all data permanently.')) {
+      localStorage.clear();
+      location.reload();
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "space-y-6 max-w-md"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
+    className: "text-3xl font-bold text-gray-800"
+  }, "\u2699\uFE0F Settings")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-lg font-bold text-gray-800 mb-4"
+  }, "\uD83D\uDCCA Data Management"), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleExportData,
+    className: "w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+  }, "\uD83D\uDCE5 Export Data"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleClearAll,
+    className: "w-full px-4 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-semibold"
+  }, "\uD83D\uDDD1\uFE0F Clear All Data"))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-lg font-bold text-gray-800 mb-4"
+  }, "\u2139\uFE0F About"), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2 text-sm text-gray-600"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "App Name:"), " GardenPal"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "Version:"), " 1.0.0"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "Gardens:"), " ", gardens.length), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "Seeds:"), " ", seeds.length), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, "Tasks:"), " ", tasks.filter(t => !t.completed).length, " pending"))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800"
+  }, /*#__PURE__*/React.createElement("p", null, "GardenPal helps you manage your garden from seed to harvest. Track your plants, get care reminders, and celebrate your gardening success!")));
+};
+
+/**
+ * NotificationToast Component
+ * Toast notifications in top-right corner
+ */
+const NotificationToast = ({
+  notification,
+  onDismiss
+}) => {
+  React.useEffect(() => {
+    const timer = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+  const typeConfig = {
+    info: {
+      bg: 'bg-blue-500',
+      icon: 'ℹ️'
+    },
+    success: {
+      bg: 'bg-green-500',
+      icon: '✓'
+    },
+    warning: {
+      bg: 'bg-yellow-500',
+      icon: '⚠️'
+    },
+    error: {
+      bg: 'bg-red-500',
+      icon: '✕'
+    }
+  };
+  const config = typeConfig[notification.type] || typeConfig.info;
+  return /*#__PURE__*/React.createElement("div", {
+    className: `${config.bg} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in`,
+    style: {
+      animation: 'slideIn 0.3s ease-out'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, config.icon), /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold"
+  }, notification.message));
+};
+
+/**
+ * Main App Component
+ * Root component with navigation and all views
+ */
+const AppContent = () => {
+  const [activeTab, setActiveTab] = React.useState('garden');
+  const {
+    tasks
+  } = useData();
+  const {
+    notifications,
+    dismissNotification
+  } = useNotifications();
+  const pendingTasks = tasks.filter(t => !t.completed).length;
+  const tabs = [{
+    id: 'seeds',
+    label: 'Seeds',
+    icon: '🌱'
+  }, {
+    id: 'garden',
+    label: 'Garden',
+    icon: '🌿'
+  }, {
+    id: 'tasks',
+    label: 'Tasks',
+    icon: '📋',
+    badge: pendingTasks > 0 ? pendingTasks : null
+  }, {
+    id: 'settings',
+    label: 'Settings',
+    icon: '⚙️'
+  }];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "min-h-screen bg-gray-50 pb-20"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 shadow-sm"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-lg mx-auto px-4 py-4 flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("h1", {
+    className: "text-2xl font-bold text-green-600"
+  }, "\uD83C\uDF31 GardenPal"), /*#__PURE__*/React.createElement("button", {
+    className: "relative"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-2xl"
+  }, "\uD83D\uDD14"), notifications.length > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
+  }, notifications.length)))), /*#__PURE__*/React.createElement("div", {
+    className: "max-w-lg mx-auto px-4 pt-24"
+  }, activeTab === 'seeds' && /*#__PURE__*/React.createElement(SeedBoxView, null), activeTab === 'garden' && /*#__PURE__*/React.createElement(GardenManagerView, null), activeTab === 'tasks' && /*#__PURE__*/React.createElement(TaskDashboard, null), activeTab === 'settings' && /*#__PURE__*/React.createElement(SettingsView, null)), /*#__PURE__*/React.createElement("div", {
+    className: "fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-lg mx-auto flex justify-around"
+  }, tabs.map(tab => /*#__PURE__*/React.createElement("button", {
+    key: tab.id,
+    onClick: () => setActiveTab(tab.id),
+    className: `flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-colors ${activeTab === tab.id ? 'text-green-600 border-t-2 border-green-600' : 'text-gray-600 hover:text-gray-800'}`
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-2xl"
+  }, tab.icon), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs font-semibold"
+  }, tab.label), tab.badge && /*#__PURE__*/React.createElement("span", {
+    className: "absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+  }, tab.badge))))), /*#__PURE__*/React.createElement("div", {
+    className: "fixed top-20 right-4 z-50 space-y-3 max-w-sm"
+  }, notifications.map(notif => /*#__PURE__*/React.createElement(NotificationToast, {
+    key: notif.id,
+    notification: notif,
+    onDismiss: () => dismissNotification(notif.id)
+  }))), /*#__PURE__*/React.createElement("style", null, `
+          @keyframes slideIn {
+            from {
+              transform: translateX(400px);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+        `));
+};
+
+const App = () => {
+  return /*#__PURE__*/React.createElement(DataProvider, null, /*#__PURE__*/React.createElement(AppContent, null));
+};
+
+/**
+ * ReactDOM Render
+ */
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(/*#__PURE__*/React.createElement(App, null));
+  </script>
+</body>
+</html>

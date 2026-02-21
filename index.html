@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#10b981">
+  <meta name="description" content="Smart seed storage and square foot garden management">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GardenPal">
+  <link rel="manifest" href="./manifest.json">
+  <title>GardenPal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            garden: {
+              50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
+              400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d',
+              800: '#166534', 900: '#14532d'
+            },
+            earth: {
+              50: '#fdf8f0', 100: '#f5e6d3', 200: '#e8c9a0', 300: '#d4a574',
+              400: '#c08552', 500: '#a0673d', 600: '#7c4f30', 700: '#5c3a23'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0fdf4; overscroll-behavior: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    .animate-pop { animation: pop 0.25s ease-out; }
+    .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+    .slot-capsule { transition: all 0.2s ease; }
+    .slot-capsule:hover { transform: scale(1.08); box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .garden-square { transition: all 0.15s ease; }
+    .garden-square:hover { transform: scale(1.03); }
+    .tab-active { border-bottom: 3px solid #10b981; color: #10b981; font-weight: 600; }
+    .modal-backdrop { backdrop-filter: blur(4px); }
+    .timeline-dot { transition: all 0.2s ease; }
+    .timeline-dot.active { box-shadow: 0 0 0 4px rgba(16,185,129,0.3); }
+    input, select, textarea { font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="./app.compiled.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
