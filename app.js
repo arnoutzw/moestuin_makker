@@ -1836,24 +1836,60 @@ const SeedBoxView = () => {
         key={`slot-${index}`}
         onClick={() => setSelectedSlot(index)}
         className={`
-          w-12 h-16 rounded-full flex flex-col items-center justify-center gap-0.5
-          transition-all duration-300 cursor-pointer
-          ${seed
-            ? `text-white font-bold text-xs text-center px-1 ${glow ? 'ring-2 ring-green-400 animate-pulse' : ''}`
-            : 'border-2 border-dashed border-gray-300 text-gray-400 hover:border-green-400'
-          }
-          ${seed ? 'shadow-md hover:shadow-lg' : 'hover:bg-gray-50'}
+          relative flex flex-col items-center cursor-pointer group
+          transition-transform duration-200 hover:scale-105
         `}
-        style={seed ? { backgroundColor: color } : {}}
+        style={{ width: '48px' }}
       >
-        {seed ? (
-          <>
-            <span className="text-sm">{plant?.emoji}</span>
-            <span className="text-xs font-semibold">{plant?.species.split(' ')[0].slice(0, 3).toUpperCase()}</span>
-          </>
-        ) : (
-          <span className="text-lg">+</span>
-        )}
+        {/* Cork top */}
+        <div
+          className={`
+            w-8 h-4 rounded-t-lg z-10 relative
+            ${seed ? '' : 'opacity-30'}
+          `}
+          style={{
+            background: seed
+              ? 'radial-gradient(ellipse at 40% 40%, #d4a574, #b8845a 40%, #96673e 80%)'
+              : 'radial-gradient(ellipse at 40% 40%, #555, #333 40%, #222 80%)',
+            boxShadow: seed ? 'inset 0 1px 2px rgba(255,255,255,0.3), 0 1px 2px rgba(0,0,0,0.3)' : 'none',
+          }}
+        />
+        {/* Glass vial body */}
+        <div
+          className={`
+            w-10 h-14 rounded-b-xl flex flex-col items-center justify-center gap-0.5
+            border border-opacity-30 relative overflow-hidden
+            ${seed
+              ? `${glow ? 'ring-2 ring-green-400 animate-pulse-soft' : ''}`
+              : 'hover:border-green-400'
+            }
+          `}
+          style={seed ? {
+            background: `linear-gradient(135deg, ${color}dd, ${color}99)`,
+            borderColor: `${color}`,
+            boxShadow: `inset 0 0 12px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.3)`,
+          } : {
+            background: 'radial-gradient(ellipse at 50% 50%, rgba(60,60,60,0.6), rgba(30,30,30,0.8))',
+            borderColor: 'rgba(80,80,80,0.5)',
+            borderStyle: 'dashed',
+          }}
+        >
+          {/* Glass shine effect */}
+          <div
+            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            style={{
+              background: 'linear-gradient(105deg, rgba(255,255,255,0.2) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.05) 100%)',
+            }}
+          />
+          {seed ? (
+            <>
+              <span className="text-base relative z-10">{plant?.emoji}</span>
+              <span className="text-xs font-bold text-white relative z-10 drop-shadow">{plant?.species.split(' ')[0].slice(0, 3).toUpperCase()}</span>
+            </>
+          ) : (
+            <span className="text-lg text-gray-500 group-hover:text-green-400 transition-colors">+</span>
+          )}
+        </div>
       </button>
     );
   };
@@ -1873,7 +1909,7 @@ const SeedBoxView = () => {
       rows.push(
         <div
           key={`row-${rowIndex}`}
-          className={`flex gap-3 justify-center ${isOffsetRow ? 'ml-6' : ''}`}
+          className={`flex gap-2 justify-center ${isOffsetRow ? 'ml-5' : ''}`}
         >
           {rowSlots}
         </div>
@@ -1930,9 +1966,23 @@ const SeedBoxView = () => {
         ))}
       </div>
 
-      {/* Seed Box Grid */}
-      <div className="bg-white rounded-xl border-2 border-green-200 p-8 space-y-6">
-        {renderGrid()}
+      {/* Seed Box Grid - Wooden box with dark foam */}
+      <div
+        className="rounded-xl p-3 shadow-lg"
+        style={{
+          background: 'linear-gradient(145deg, #c4a265, #a0835a 30%, #8b6f47 60%, #7a6040)',
+          boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.3)',
+        }}
+      >
+        <div
+          className="rounded-lg p-5 space-y-3"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 50%, #2a2a2a, #1a1a1a 70%, #111 100%)',
+            boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)',
+          }}
+        >
+          {renderGrid()}
+        </div>
       </div>
 
       {/* Seed Slot Modal */}

@@ -2623,22 +2623,43 @@ const SeedBoxView = () => {
     return /*#__PURE__*/React.createElement("button", {
       key: `slot-${index}`,
       onClick: () => setSelectedSlot(index),
-      className: `
-          w-12 h-16 rounded-full flex flex-col items-center justify-center gap-0.5
-          transition-all duration-300 cursor-pointer
-          ${seed ? `text-white font-bold text-xs text-center px-1 ${glow ? 'ring-2 ring-green-400 animate-pulse' : ''}` : 'border-2 border-dashed border-gray-300 text-gray-400 hover:border-green-400'}
-          ${seed ? 'shadow-md hover:shadow-lg' : 'hover:bg-gray-50'}
-        `,
+      className: `relative flex flex-col items-center cursor-pointer group transition-transform duration-200 hover:scale-105`,
+      style: { width: '48px' }
+    },
+    /*#__PURE__*/React.createElement("div", {
+      className: `w-8 h-4 rounded-t-lg z-10 relative ${seed ? '' : 'opacity-30'}`,
+      style: {
+        background: seed
+          ? 'radial-gradient(ellipse at 40% 40%, #d4a574, #b8845a 40%, #96673e 80%)'
+          : 'radial-gradient(ellipse at 40% 40%, #555, #333 40%, #222 80%)',
+        boxShadow: seed ? 'inset 0 1px 2px rgba(255,255,255,0.3), 0 1px 2px rgba(0,0,0,0.3)' : 'none',
+      }
+    }),
+    /*#__PURE__*/React.createElement("div", {
+      className: `w-10 h-14 rounded-b-xl flex flex-col items-center justify-center gap-0.5 border border-opacity-30 relative overflow-hidden ${seed ? `${glow ? 'ring-2 ring-green-400 animate-pulse-soft' : ''}` : 'hover:border-green-400'}`,
       style: seed ? {
-        backgroundColor: color
-      } : {}
-    }, seed ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
-      className: "text-sm"
+        background: `linear-gradient(135deg, ${color}dd, ${color}99)`,
+        borderColor: `${color}`,
+        boxShadow: `inset 0 0 12px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.3)`,
+      } : {
+        background: 'radial-gradient(ellipse at 50% 50%, rgba(60,60,60,0.6), rgba(30,30,30,0.8))',
+        borderColor: 'rgba(80,80,80,0.5)',
+        borderStyle: 'dashed',
+      }
+    },
+    /*#__PURE__*/React.createElement("div", {
+      className: "absolute top-0 left-0 w-full h-full pointer-events-none",
+      style: {
+        background: 'linear-gradient(105deg, rgba(255,255,255,0.2) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.05) 100%)',
+      }
+    }),
+    seed ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+      className: "text-base relative z-10"
     }, plant?.emoji), /*#__PURE__*/React.createElement("span", {
-      className: "text-xs font-semibold"
+      className: "text-xs font-bold text-white relative z-10 drop-shadow"
     }, plant?.species.split(' ')[0].slice(0, 3).toUpperCase())) : /*#__PURE__*/React.createElement("span", {
-      className: "text-lg"
-    }, "+"));
+      className: "text-lg text-gray-500 group-hover:text-green-400 transition-colors"
+    }, "+")));
   };
   const renderGrid = () => {
     const rows = [];
@@ -2652,7 +2673,7 @@ const SeedBoxView = () => {
       const isOffsetRow = slotsInRow === 6;
       rows.push(/*#__PURE__*/React.createElement("div", {
         key: `row-${rowIndex}`,
-        className: `flex gap-3 justify-center ${isOffsetRow ? 'ml-6' : ''}`
+        className: `flex gap-2 justify-center ${isOffsetRow ? 'ml-5' : ''}`
       }, rowSlots));
     });
     return rows;
@@ -2692,8 +2713,18 @@ const SeedBoxView = () => {
       backgroundColor: PLANT_FAMILIES[family]
     } : {}
   }, family))), /*#__PURE__*/React.createElement("div", {
-    className: "bg-white rounded-xl border-2 border-green-200 p-8 space-y-6"
-  }, renderGrid()), selectedSlot !== null && /*#__PURE__*/React.createElement(SeedSlotModal, {
+    className: "rounded-xl p-3 shadow-lg",
+    style: {
+      background: 'linear-gradient(145deg, #c4a265, #a0835a 30%, #8b6f47 60%, #7a6040)',
+      boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.3)',
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rounded-lg p-5 space-y-3",
+    style: {
+      background: 'radial-gradient(ellipse at 50% 50%, #2a2a2a, #1a1a1a 70%, #111 100%)',
+      boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)',
+    }
+  }, renderGrid())), selectedSlot !== null && /*#__PURE__*/React.createElement(SeedSlotModal, {
     slotIndex: selectedSlot,
     isOpen: selectedSlot !== null,
     onClose: () => setSelectedSlot(null)
