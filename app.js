@@ -1,5 +1,5 @@
 // ============================================================================
-// GARDENPAL APP.JS - FIRST HALF
+// MOESTUIN MAKKER APP.JS - FIRST HALF
 // React 18 App with Tailwind CSS - Production Code
 // ============================================================================
 
@@ -1560,9 +1560,9 @@ const useLocalStorage = (key, initialValue) => {
 const DataContext = createContext();
 
 const DataProvider = ({ children }) => {
-  const [seeds, setSeeds] = useLocalStorage('gardenpal_seeds', []);
-  const [gardens, setGardens] = useLocalStorage('gardenpal_gardens', []);
-  const [tasks, setTasks] = useLocalStorage('gardenpal_tasks', []);
+  const [seeds, setSeeds] = useLocalStorage('moestuinmakker_seeds', []);
+  const [gardens, setGardens] = useLocalStorage('moestuinmakker_gardens', []);
+  const [tasks, setTasks] = useLocalStorage('moestuinmakker_tasks', []);
 
   const addSeed = useCallback((seed) => {
     const newSeed = {
@@ -3203,7 +3203,7 @@ const SettingsView = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gardenpal-backup-${formatDate(new Date()).split(' ')[0]}.json`;
+    a.download = `moestuinmakker-backup-${formatDate(new Date()).split(' ')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -3249,7 +3249,7 @@ const SettingsView = () => {
         <h3 className="text-lg font-bold text-gray-800 mb-4">ℹ️ About</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <div>
-            <span className="font-semibold">App Name:</span> GardenPal
+            <span className="font-semibold">App Name:</span> Moestuin Makker
           </div>
           <div>
             <span className="font-semibold">Version:</span> 1.0.0
@@ -3269,7 +3269,7 @@ const SettingsView = () => {
       {/* Info */}
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800">
         <p>
-          GardenPal helps you manage your garden from seed to harvest. Track your plants, get care reminders, and celebrate your gardening success!
+          Moestuin Makker helps you manage your garden from seed to harvest. Track your plants, get care reminders, and celebrate your gardening success!
         </p>
       </div>
     </div>
@@ -3332,7 +3332,7 @@ const App = () => {
         {/* Header */}
         <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 shadow-sm">
           <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-green-600">🌱 GardenPal</h1>
+            <h1 className="text-2xl font-bold text-green-600">🌱 Moestuin Makker</h1>
             <button className="relative">
               <span className="text-2xl">🔔</span>
               {notifications.length > 0 && (

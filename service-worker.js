@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gardenpal-v1';
+const CACHE_NAME = 'moestuinmakker-v1';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -49,13 +49,13 @@ self.addEventListener('push', event => {
     body: data.body || 'You have a garden task!',
     icon: data.icon || './icon-192.png',
     badge: './icon-192.png',
-    tag: data.tag || 'gardenpal',
+    tag: data.tag || 'moestuinmakker',
     actions: data.actions || [
       { action: 'complete', title: 'Mark Done' },
       { action: 'snooze', title: 'Snooze' }
     ]
   };
-  event.waitUntil(self.registration.showNotification(data.title || 'GardenPal', options));
+  event.waitUntil(self.registration.showNotification(data.title || 'Moestuin Makker', options));
 });
 
 // Notification click handler
