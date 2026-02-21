@@ -2818,7 +2818,13 @@ const GardenManagerView = () => {
   const [newGardenType, setNewGardenType] = React.useState('2x2');
   const [selectedSquare, setSelectedSquare] = React.useState(null);
 
+  const MAX_GARDENS = 20;
+
   const handleAddGarden = async () => {
+    if (gardens.length >= MAX_GARDENS) {
+      addNotification('warning', 'Limit Reached', `You can have a maximum of ${MAX_GARDENS} garden boxes.`);
+      return;
+    }
     if (!newGardenName.trim()) {
       addNotification('warning', 'Missing Name', 'Please enter a garden name');
       return;
@@ -2868,9 +2874,15 @@ const GardenManagerView = () => {
         <h1 className="text-3xl font-bold text-gray-800">🌿 My Garden</h1>
         <button
           onClick={() => setShowNewGarden(!showNewGarden)}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+          disabled={gardens.length >= MAX_GARDENS}
+          className={`px-4 py-2 rounded-lg transition-colors font-semibold ${
+            gardens.length >= MAX_GARDENS
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-green-600 text-white hover:bg-green-700'
+          }`}
+          title={gardens.length >= MAX_GARDENS ? `Maximum ${MAX_GARDENS} boxes reached` : 'Add a new garden box'}
         >
-          + New Box
+          + New Box ({gardens.length}/{MAX_GARDENS})
         </button>
       </div>
 
